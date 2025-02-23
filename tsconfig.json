@@ -17,6 +17,14 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "src/pages/index.js",
+    "next.config.js",
+    "src/pages/api/upload-recording.js",
+    "src/pages/api/teleporter/logs.js"
+  ],
   "exclude": ["node_modules"]
 }
