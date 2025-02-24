@@ -14,19 +14,19 @@
     "jsx": "preserve",
     "incremental": true,
     "paths": {
-      "@/*": ["root/src/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "root/src/pages/index.jsx",
+    "src/pages/index.jsx",
     "next.config.js",
-    "root/src/pages/api/upload-recording.js",
-    "root/src/pages/api/teleporter/logs.js",
-    "root/src/pages/_document.jsx",
-    "root/src/pages/_app.js"
+    "src/pages/api/upload-recording.js",
+    "src/pages/api/teleporter/logs.js",
+    "src/pages/_document.jsx",
+    "src/pages/_app.js"
   ],
   "exclude": ["node_modules"]
 }
