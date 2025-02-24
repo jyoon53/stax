@@ -1,6 +1,6 @@
 // src/pages/_app.jsx
 import "../styles/globals.css";
-import Layout from "./components/layout"; // Corrected path and capitalization
+import Layout from "./components/Layout";
 import { useRouter } from "next/router";
 
 function MyApp({ Component, pageProps }) {
