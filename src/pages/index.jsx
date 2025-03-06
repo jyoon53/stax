@@ -1,30 +1,52 @@
-// src/pages/index.jsx
 import Link from "next/link";
 
-export default function Landing() {
+export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white text-darkGray">
-      <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
-        <div className="md:w-1/2 flex justify-center">
-          {/* Placeholder for an illustration image */}
-          <img src="/logo.png" alt="Stax Illustration" className="w-3/4" />
-        </div>
-        <div className="md:w-1/2 mt-8 md:mt-0 text-center md:text-left">
-          <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4">
-            Stax - Roblox-based Education Platform
+    <div className="min-h-screen bg-white">
+      <header className="flex justify-between items-center p-6">
+        <div className="text-2xl font-bold">Stax</div>
+        <Link href="/login">
+          <span className="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded cursor-pointer">
+            Login
+          </span>
+        </Link>
+      </header>
+      <main className="container mx-auto px-6 py-12">
+        <section className="text-center">
+          <h1 className="text-5xl font-serif font-bold mb-4">
+            Welcome to Stax
           </h1>
-          <p className="text-lg mb-6">
-            Build, learn, and scale your educational journey with structured,
-            interactive Roblox experiences.
+          <p className="text-xl mb-8">
+            Stax is a Roblox-based Education Platform dedicated to
+            revolutionizing the learning experience. Our mission is to harness
+            the creativity and interactivity of Roblox to deliver engaging,
+            effective, and fun education.
           </p>
-          <Link
-            href="/dashboard"
-            className="bg-primary hover:bg-accent text-white py-3 px-6 rounded font-semibold"
-          >
-            Explore
+          <p className="text-lg mb-8">
+            Benefit from immersive, interactive lessons that blend gaming with
+            learning. Whether you're a student or an instructor, Stax provides
+            the tools to make learning an adventure.
+          </p>
+          <Link href="/login">
+            <span className="bg-red-600 hover:bg-red-700 text-white py-3 px-8 rounded font-semibold cursor-pointer">
+              Get Started
+            </span>
           </Link>
-        </div>
-      </div>
+        </section>
+        <section className="mt-16">
+          <h2 className="text-3xl font-bold mb-4">Why Roblox Education?</h2>
+          <p className="text-lg">
+            Roblox offers a dynamic and engaging environment for interactive
+            learning, empowering educators to create immersive lessons that
+            captivate students. Stax leverages this platform to provide a
+            comprehensive LMS solution that simplifies course management,
+            fosters creativity, and tracks progress seamlessly.
+          </p>
+        </section>
+      </main>
+      <footer className="bg-gray-50 py-4 text-center text-gray-500">
+        © {new Date().getFullYear()} Stax LMS. All rights reserved.
+      </footer>
     </div>
   );
 }

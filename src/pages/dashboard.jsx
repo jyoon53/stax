@@ -1,17 +1,14 @@
-// src/pages/dashboard.jsx
 import Link from "next/link";
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import io from "socket.io-client";
 
 const socket = io();
 
-export default function dashboard() {
+export default function InstructorDashboard() {
   const [data, setData] = useState(null);
-  const [lessonPlan, setLessonPlan] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [status, setStatus] = useState("");
-  const [logs, setLogs] = useState([]);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
 
@@ -19,19 +16,6 @@ export default function dashboard() {
     socket.on("teleporterData", (incomingData) => {
       setData(incomingData);
     });
-  }, []);
-
-  useEffect(() => {
-    async function fetchLogs() {
-      try {
-        const response = await fetch("/api/teleporter/logs");
-        const logsData = await response.json();
-        setLogs(logsData);
-      } catch (error) {
-        console.error("Error fetching logs:", error);
-      }
-    }
-    fetchLogs();
   }, []);
 
   const startRecording = async () => {
@@ -82,8 +66,8 @@ export default function dashboard() {
         body: formData,
       });
       const plan = await response.json();
-      setLessonPlan(plan);
       setStatus("Lesson plan generated!");
+      // Process lesson plan as needed.
     } catch (error) {
       console.error("Upload error:", error);
       setStatus("Upload error.");
@@ -91,93 +75,78 @@ export default function dashboard() {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Teacher Dashboard</h1>
-      {/* Real-Time Teleporter Data */}
-      <section className="mb-8 p-4 bg-gray-50 border rounded">
-        <h3 className="text-xl font-semibold mb-2">
-          Real-Time Teleporter Data
-        </h3>
-        {data ? (
-          <pre className="bg-white p-2 rounded border text-gray-700">
-            {JSON.stringify(data, null, 2)}
-          </pre>
-        ) : (
-          <p>No teleporter data received yet.</p>
-        )}
-      </section>
-
-      {/* Recording Section */}
-      <section className="mb-8 p-4 bg-red-50 border rounded">
-        <h3 className="text-xl font-semibold mb-2">Lesson Recording</h3>
-        <p className="mb-2 text-sm text-gray-600">{status}</p>
-        {recording ? (
+    <div className="p-8 text-black">
+      <h1 className="text-3xl font-bold mb-6">Instructor Dashboard</h1>
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">
+          Class & Lecture Creation
+        </h2>
+        <div className="mb-4">
           <button
-            onClick={stopRecording}
+            onClick={recording ? stopRecording : startRecording}
             className="bg-red-600 hover:bg-red-700 transition duration-300 text-white py-2 px-4 rounded"
           >
-            Stop Recording
+            {recording ? "Stop Recording" : "Start Recording"}
           </button>
-        ) : (
-          <button
-            onClick={startRecording}
-            className="bg-red-600 hover:bg-red-700 transition duration-300 text-white py-2 px-4 rounded"
-          >
-            Start Recording
-          </button>
-        )}
-        {recordedBlob && (
-          <div className="mt-4">
-            <video
-              controls
-              src={URL.createObjectURL(recordedBlob)}
-              className="w-full max-w-md border rounded"
-            />
-            <button
-              onClick={uploadRecording}
-              className="mt-2 bg-red-600 hover:bg-red-700 transition duration-300 text-white py-2 px-4 rounded"
-            >
-              Upload Recording
-            </button>
-          </div>
-        )}
+          {recordedBlob && (
+            <div className="mt-4">
+              <video
+                controls
+                src={URL.createObjectURL(recordedBlob)}
+                className="w-full max-w-md border rounded"
+              />
+              <button
+                onClick={uploadRecording}
+                className="mt-2 bg-red-600 hover:bg-red-700 transition duration-300 text-white py-2 px-4 rounded"
+              >
+                Upload Recording & Generate Lesson Plan
+              </button>
+            </div>
+          )}
+        </div>
       </section>
-
-      {/* Lesson Plan Section */}
-      {lessonPlan && (
-        <section className="p-4 bg-red-50 border rounded">
-          <h3 className="text-xl font-semibold mb-2">Lesson Plan</h3>
-          <ul className="list-disc ml-6">
-            {lessonPlan.chapters.map((chapter, index) => (
-              <li key={index}>
-                {chapter.title}:{" "}
-                <Link href={chapter.clipUrl}>
-                  <span className="text-red-600 hover:underline cursor-pointer">
-                    {chapter.clipUrl}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Historical Logs Section */}
-      <section className="mt-8 p-4 bg-gray-50 border rounded">
-        <h3 className="text-xl font-semibold mb-2">
-          Historical Teleporter Logs
-        </h3>
-        {logs.length ? (
-          <ul className="list-disc ml-6">
-            {logs.map((log) => (
-              <li key={log.id}>
-                {log.timestamp}: {log.userID} in {log.chapterID}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No logs available.</p>
-        )}
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Course Organizing Tools</h2>
+        <div className="p-4 bg-white rounded shadow">
+          <p className="text-lg">
+            Manage your courses, schedule lectures, and track student
+            attendance.
+          </p>
+          <Link href="/course-management">
+            <span className="text-red-600 hover:underline cursor-pointer">
+              Go to Course Management
+            </span>
+          </Link>
+        </div>
+      </section>
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Calendar</h2>
+        <div className="p-4 bg-white rounded shadow">
+          <p className="text-lg">
+            View upcoming lectures, meetings, and class schedules.
+          </p>
+          <Link href="/calendar">
+            <span className="text-red-600 hover:underline cursor-pointer">
+              View Calendar
+            </span>
+          </Link>
+        </div>
+      </section>
+      <section>
+        <h2 className="text-2xl font-semibold mb-4">
+          Course Roster Management
+        </h2>
+        <div className="p-4 bg-white rounded shadow">
+          <p className="text-lg">
+            Manage your class rosters, invite collaborators, and track student
+            progress.
+          </p>
+          <Link href="/roster-management">
+            <span className="text-red-600 hover:underline cursor-pointer">
+              Manage Roster
+            </span>
+          </Link>
+        </div>
       </section>
     </div>
   );
