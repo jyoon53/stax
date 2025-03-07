@@ -12,22 +12,14 @@ export default function Layout({
   role = "home",
 }) {
   const renderHeader = () => {
-    if (role === "instructor") {
-      return <InstructorHeader />;
-    }
-    if (role === "student") {
-      return <StudentHeader />;
-    }
+    if (role === "instructor") return <InstructorHeader />;
+    if (role === "student") return <StudentHeader />;
     return <UniversalHeader />;
   };
 
   const renderFooter = () => {
-    if (role === "instructor") {
-      return <InstructorFooter />;
-    }
-    if (role === "student") {
-      return <StudentFooter />;
-    }
+    if (role === "instructor") return <InstructorFooter />;
+    if (role === "student") return <StudentFooter />;
     return <UniversalFooter />;
   };
 
