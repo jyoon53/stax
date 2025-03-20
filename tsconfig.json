@@ -24,9 +24,9 @@
     "**/*.tsx",
     "src/pages/index.jsx",
     "next.config.js",
-    "src/pages/api/upload-recording.js",
+    "deleted/upload-recording.js",
     "src/pages/api/teleporter/logs.js",
-    "src/pages/_document.jsx",
+    "deleted/_document.jsx",
     "src/pages/_app.js"
   ],
   "exclude": ["node_modules"]

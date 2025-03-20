@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-export default function Sidebar() {
+export default function InstructorSidebar() {
   const router = useRouter();
   const navItems = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/lesson-planner", label: "Lesson Planner" },
-    { href: "/analytics", label: "Analytics" },
-    { href: "/calendar", label: "Calendar" },
-    { href: "/settings", label: "Settings" },
+    { href: "/instructor-dashboard", label: "Dashboard" },
+    { href: "/upload-lesson", label: "Upload Lesson" },
+    { href: "/manage-students", label: "Manage Students" },
+    { href: "/track-progress", label: "Track Progress" },
   ];
 
   return (
     <nav>
-      <h2 className="text-lg font-bold mb-4">Navigation</h2>
+      <h2 className="text-lg font-bold mb-4">Instructor Menu</h2>
       <ul className="space-y-3">
         {navItems.map((item) => (
           <li key={item.href}>

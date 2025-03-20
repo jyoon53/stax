@@ -10,9 +10,9 @@ export default function StudentHeader() {
             Dashboard
           </span>
         </Link>
-        <Link href="/courses">
+        <Link href="/classes">
           <span className="hover:text-red-600 transition duration-300 cursor-pointer">
-            Courses
+            Classes
           </span>
         </Link>
         <Link href="/progress">

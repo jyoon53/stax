@@ -1,16 +1,20 @@
 import { useState } from "react";
+import { useRouter } from "next/router";
 import Link from "next/link";
 
 export default function Login() {
   const [userType, setUserType] = useState("student");
+  const router = useRouter();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // For now, simply redirect based on userType
+    // Save the user type for persistence
+    localStorage.setItem("userType", userType);
+    // Redirect based on the selected role
     if (userType === "student") {
-      window.location.href = "/student-dashboard";
+      await router.push("/student-dashboard");
     } else {
-      window.location.href = "/instructor-dashboard";
+      await router.push("/instructor-dashboard");
     }
   };
 

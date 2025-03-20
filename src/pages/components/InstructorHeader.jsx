@@ -10,19 +10,19 @@ export default function InstructorHeader() {
             Dashboard
           </span>
         </Link>
-        <Link href="/course-management">
+        <Link href="/upload-lesson">
           <span className="hover:text-red-600 transition duration-300 cursor-pointer">
-            Courses
+            Upload Lesson
           </span>
         </Link>
-        <Link href="/calendar">
+        <Link href="/manage-students">
           <span className="hover:text-red-600 transition duration-300 cursor-pointer">
-            Calendar
+            Manage Students
           </span>
         </Link>
-        <Link href="/settings">
+        <Link href="/track-progress">
           <span className="hover:text-red-600 transition duration-300 cursor-pointer">
-            Settings
+            Track Progress
           </span>
         </Link>
       </nav>
