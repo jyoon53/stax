@@ -2,7 +2,7 @@
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    // Destructure the expected fields from the request body
+    // Destructure the incoming payload from Roblox.
     const {
       gameId,
       lessonId,
@@ -10,28 +10,30 @@ export default async function handler(req, res) {
       studentId,
       startTime,
       endTime,
-      duration, // Optional: you can compute it if not provided
-      score, // Optional field
+      score,
       additionalData,
     } = req.body;
 
-    // For debugging purposes, log the entire payload.
-    console.log("Received exercise completion data:", req.body);
+    // Map the keys to your LMS data model.
+    const payload = {
+      game_id: gameId,
+      lesson_id: lessonId,
+      exercise_id: exerciseId,
+      student_id: studentId,
+      start_time: startTime,
+      end_time: endTime,
+      // Compute duration if startTime and endTime are provided.
+      duration: startTime && endTime ? endTime - startTime : undefined,
+      score: score,
+      additional_data: additionalData || {},
+    };
 
-    // If duration is not provided, compute it (if startTime and endTime are valid)
-    const computedDuration =
-      startTime && endTime ? endTime - startTime : duration;
+    // Log the mapped payload to verify correct transformation.
+    console.log("Mapped Payload:", payload);
 
-    // Here you would normally update your database (e.g., Firestore)
+    // Here you would normally update your database with this payload.
     // For now, we simulate success.
-
-    console.log(
-      `Student ${studentId} completed exercise ${exerciseId} in lesson ${lessonId} of game ${gameId}. `,
-      `Start: ${startTime}, End: ${endTime}, Duration: ${computedDuration}, Score: ${score}, Additional: `,
-      additionalData
-    );
-
-    res.status(200).json({ message: "Exercise marked as complete." });
+    res.status(200).json({ message: "Exercise marked as complete.", payload });
   } else {
     res.status(405).json({ message: "Method not allowed." });
   }
