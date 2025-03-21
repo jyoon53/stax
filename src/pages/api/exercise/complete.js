@@ -1,8 +1,17 @@
 // src/pages/api/exercise/complete.js
 
+import admin from "firebase-admin";
+import serviceAccount from "../../../credentials/serviceAccountKey.json";
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
+const db = admin.firestore();
+
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    // Destructure the incoming payload from Roblox.
     const {
       gameId,
       lessonId,
@@ -14,26 +23,39 @@ export default async function handler(req, res) {
       additionalData,
     } = req.body;
 
-    // Map the keys to your LMS data model.
+    // Log incoming data for debugging
+    console.log("Received exercise completion data:", req.body);
+
+    // Calculate duration if not provided
+    const duration = startTime && endTime ? endTime - startTime : undefined;
+
+    // Create a document payload that matches your data model
     const payload = {
-      game_id: gameId,
-      lesson_id: lessonId,
-      exercise_id: exerciseId,
-      student_id: studentId,
-      start_time: startTime,
-      end_time: endTime,
-      // Compute duration if startTime and endTime are provided.
-      duration: startTime && endTime ? endTime - startTime : undefined,
-      score: score,
-      additional_data: additionalData || {},
+      gameId,
+      lessonId,
+      exerciseId,
+      studentId,
+      startTime,
+      endTime,
+      duration,
+      score,
+      additionalData: additionalData || {},
+      timestamp: admin.firestore.FieldValue.serverTimestamp(), // optional: track when the record was saved
     };
 
-    // Log the mapped payload to verify correct transformation.
-    console.log("Mapped Payload:", payload);
-
-    // Here you would normally update your database with this payload.
-    // For now, we simulate success.
-    res.status(200).json({ message: "Exercise marked as complete.", payload });
+    try {
+      // Write the payload to the "progress" collection
+      await db.collection("progress").add(payload);
+      console.log(
+        `Student ${studentId} completed exercise ${exerciseId} in lesson ${lessonId}`
+      );
+      res.status(200).json({ message: "Exercise marked as complete." });
+    } catch (error) {
+      console.error("Error writing to Firestore:", error);
+      res
+        .status(500)
+        .json({ message: "Error writing to Firestore", error: error.message });
+    }
   } else {
     res.status(405).json({ message: "Method not allowed." });
   }
