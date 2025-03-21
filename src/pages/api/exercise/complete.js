@@ -1,12 +1,20 @@
 // src/pages/api/exercise/complete.js
-
 import admin from "firebase-admin";
-import serviceAccount from "../../../../credentials/serviceAccountKey.json";
 
+// Load service account JSON from environment variable
+const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  if (serviceAccountString) {
+    const serviceAccount = JSON.parse(serviceAccountString);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } else {
+    // Handle error: credentials not provided.
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT environment variable is not set."
+    );
+  }
 }
 const db = admin.firestore();
 
@@ -23,13 +31,9 @@ export default async function handler(req, res) {
       additionalData,
     } = req.body;
 
-    // Log incoming data for debugging
     console.log("Received exercise completion data:", req.body);
 
-    // Calculate duration if not provided
     const duration = startTime && endTime ? endTime - startTime : undefined;
-
-    // Create a document payload that matches your data model
     const payload = {
       gameId,
       lessonId,
@@ -40,11 +44,10 @@ export default async function handler(req, res) {
       duration,
       score,
       additionalData: additionalData || {},
-      timestamp: admin.firestore.FieldValue.serverTimestamp(), // optional: track when the record was saved
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     try {
-      // Write the payload to the "progress" collection
       await db.collection("progress").add(payload);
       console.log(
         `Student ${studentId} completed exercise ${exerciseId} in lesson ${lessonId}`
