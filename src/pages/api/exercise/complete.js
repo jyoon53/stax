@@ -1,7 +1,7 @@
 // src/pages/api/exercise/complete.js
 
 import admin from "firebase-admin";
-import serviceAccount from "../../../../serviceAccountKey.json";
+import serviceAccount from "../../../../credentials/serviceAccountKey.json";
 
 if (!admin.apps.length) {
   admin.initializeApp({
