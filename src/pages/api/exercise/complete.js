@@ -43,7 +43,7 @@ export default async function handler(req, res) {
       startTime,
       endTime,
       duration,
-      score,
+      score: score !== undefined ? score : 0, // Default score to 0 if undefined
       additionalData: additionalData || {},
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -56,12 +56,3 @@ export default async function handler(req, res) {
       res.status(200).json({ message: "Exercise marked as complete." });
     } catch (error) {
       console.error("Error writing to Firestore:", error);
-      res.status(500).json({
-        message: "Error writing to Firestore",
-        error: error.message,
-      });
-    }
-  } else {
-    res.status(405).json({ message: "Method not allowed." });
-  }
-}
