@@ -1,4 +1,3 @@
-// src/pages/api/exercise/complete.js
 import admin from "firebase-admin";
 
 // Load service account JSON from environment variable
@@ -9,8 +8,10 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
+    console.log("Firebase Admin initialized successfully.");
   } else {
     // Handle error: credentials not provided.
+    console.error("FIREBASE_SERVICE_ACCOUNT environment variable is not set.");
     throw new Error(
       "FIREBASE_SERVICE_ACCOUNT environment variable is not set."
     );
@@ -48,16 +49,17 @@ export default async function handler(req, res) {
     };
 
     try {
-      await db.collection("progress").add(payload);
+      const docRef = await db.collection("progress").add(payload);
       console.log(
-        `Student ${studentId} completed exercise ${exerciseId} in lesson ${lessonId}`
+        `Student ${studentId} completed exercise ${exerciseId} in lesson ${lessonId}. Document ID: ${docRef.id}`
       );
       res.status(200).json({ message: "Exercise marked as complete." });
     } catch (error) {
       console.error("Error writing to Firestore:", error);
-      res
-        .status(500)
-        .json({ message: "Error writing to Firestore", error: error.message });
+      res.status(500).json({
+        message: "Error writing to Firestore",
+        error: error.message,
+      });
     }
   } else {
     res.status(405).json({ message: "Method not allowed." });
