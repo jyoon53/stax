@@ -1,25 +1,11 @@
 import admin from "firebase-admin";
-import {
-  getAllJSDocTagsOfKind,
-  sortAndDeduplicateDiagnostics,
-} from "typescript";
 
-// Load service account JSON from environment variable
-const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
+// Initialize Firebase Admin using your environment variable
 if (!admin.apps.length) {
-  if (serviceAccountString) {
-    const serviceAccount = JSON.parse(serviceAccountString);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("Firebase Admin initialized successfully.");
-  } else {
-    // Handle error: credentials not provided.
-    console.error("FIREBASE_SERVICE_ACCOUNT environment variable is not set.");
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT environment variable is not set."
-    );
-  }
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
 }
 const db = admin.firestore();
 
@@ -47,7 +33,7 @@ export default async function handler(req, res) {
       startTime,
       endTime,
       duration,
-      score: score !== undefined ? score : 0, // Default score to 0 if undefined
+      score: score !== undefined ? score : 0,
       additionalData: additionalData || {},
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };

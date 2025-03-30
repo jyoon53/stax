@@ -6,6 +6,7 @@ import InstructorFooter from "./InstructorFooter";
 import StudentFooter from "./StudentFooter";
 import InstructorSidebar from "./InstructorSidebar.jsx";
 import StudentSidebar from "./StudentSidebar.jsx";
+import { addSyntheticLeadingComment } from "typescript";
 
 export default function Layout({
   children,
