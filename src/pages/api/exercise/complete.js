@@ -1,8 +1,4 @@
 import admin from "firebase-admin";
-import {
-  getAllJSDocTagsOfKind,
-  sortAndDeduplicateDiagnostics,
-} from "typescript";
 
 // Load service account JSON from environment variable
 const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;

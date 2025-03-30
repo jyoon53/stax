@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 export default function VideoEditor() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [roomEvents, setRoomEvents] = useState([]);
-  const [playerName, setPlayerName] = useState("Instructor123"); // or from localStorage
+  const [playerName] = useState("Instructor123"); // or from localStorage
   const [clips, setClips] = useState([]);
 
   useEffect(() => {
