@@ -22,10 +22,10 @@ const db = admin.firestore();
 export default async function handler(req, res) {
   if (req.method === "POST") {
     const {
-      gameId,
-      lessonId,
-      exerciseId,
-      studentId,
+      gameID,
+      lessonID,
+      exerciseID,
+      studentID,
       startTime,
       endTime,
       score,
