@@ -1,3 +1,4 @@
+// components/InstructorFooter.js
 export default function InstructorFooter() {
   return (
     <footer className="bg-gray-50 py-4 text-center text-gray-500">

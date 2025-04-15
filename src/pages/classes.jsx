@@ -1,3 +1,4 @@
+// pages/classes.js
 export default function Classes() {
   return (
     <div className="p-8 text-black">

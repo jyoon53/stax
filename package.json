@@ -17,6 +17,7 @@
     "multer": "^1.4.5-lts.1",
     "next": "^15.2.3",
     "next-connect": "^1.0.0",
+    "obs-websocket-js": "^5.0.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io": "^4.6.1",
@@ -31,5 +32,21 @@
     "eslint-config-next": "^15.2.3",
     "postcss": "^8.4.21",
     "typescript": "5.7.3"
-  }
+  },
+  "description": "<<<<<<< HEAD This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).",
+  "main": "server.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jyoon53/stax.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jyoon53/stax/issues"
+  },
+  "homepage": "https://github.com/jyoon53/stax#readme"
 }

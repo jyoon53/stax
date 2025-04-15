@@ -1,3 +1,4 @@
+// components/UniversalHeader.js
 import Link from "next/link";
 
 export default function UniversalHeader() {

@@ -1,3 +1,4 @@
+// pages/signup.js
 import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -8,12 +9,11 @@ export default function Signup() {
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    // For demo purposes, store user type and redirect
     localStorage.setItem("userType", userType);
     if (userType === "student") {
-      await router.push("/student-dashboard");
+      router.push("/student-dashboard");
     } else {
-      await router.push("/instructor-dashboard");
+      router.push("/instructor-dashboard");
     }
   };
 

@@ -4,11 +4,10 @@ import { useState, useEffect } from "react";
 export default function VideoEditor() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [roomEvents, setRoomEvents] = useState([]);
-  const [playerName] = useState("Instructor123"); // or from localStorage
+  const [playerName] = useState("Instructor123"); // or derive from login state
   const [clips, setClips] = useState([]);
 
   useEffect(() => {
-    // Fetch the logs for the instructor
     async function loadEvents() {
       const res = await fetch(`/api/getRoomEvents?playerName=${playerName}`);
       const data = await res.json();
@@ -19,16 +18,13 @@ export default function VideoEditor() {
 
   async function handleUpload() {
     if (!selectedFile) return;
-    // We'll send the file + the logs to /api/processRoomVideo
     const formData = new FormData();
     formData.append("video", selectedFile);
-    // We only do a single room for demonstration,
-    // so we find the earliest "RoomEntrance" and the latest "RoomExit"
-    // In a real scenario, handle multiple rooms.
+
+    // For demonstration, select first entrance & exit events.
     const entrance = roomEvents.find((e) => e.eventType === "RoomEntrance");
     const exit = roomEvents.find((e) => e.eventType === "RoomExit");
-    const logs = [entrance, exit]; // simplistic approach
-
+    const logs = [entrance, exit];
     formData.append("roomLogs", JSON.stringify(logs));
 
     const res = await fetch("/api/processRoomVideo", {
@@ -38,13 +34,7 @@ export default function VideoEditor() {
     const data = await res.json();
     if (data.success) {
       console.log("Got subclip data:", data);
-      setClips([
-        {
-          start: data.start,
-          end: data.end,
-          outFile: data.savedFile,
-        },
-      ]);
+      setClips([{ start: data.start, end: data.end, outFile: data.savedFile }]);
     } else {
       console.error("Video processing error:", data.error);
     }

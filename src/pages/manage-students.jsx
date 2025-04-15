@@ -1,3 +1,4 @@
+// pages/manage-students.js
 export default function ManageStudents() {
   return (
     <div className="p-8 text-black">

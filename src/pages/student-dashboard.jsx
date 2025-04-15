@@ -1,3 +1,4 @@
+// pages/student-dashboard.js
 import { useEffect, useState } from "react";
 
 export default function StudentDashboard() {
@@ -12,7 +13,6 @@ export default function StudentDashboard() {
     fetchLessons();
   }, []);
 
-  // Compute progress: number of completed exercises divided by total exercises
   const calculateProgress = (exercises) => {
     if (!exercises || exercises.length === 0) return 0;
     const completed = exercises.filter((ex) => ex.completed).length;

@@ -1,12 +1,12 @@
+// components/Layout.js
 import UniversalHeader from "./UniversalHeader";
 import InstructorHeader from "./InstructorHeader";
 import StudentHeader from "./StudentHeader";
 import UniversalFooter from "./UniversalFooter";
 import InstructorFooter from "./InstructorFooter";
 import StudentFooter from "./StudentFooter";
-import InstructorSidebar from "./InstructorSidebar.jsx";
-import StudentSidebar from "./StudentSidebar.jsx";
-import { addSyntheticLeadingComment } from "typescript";
+import InstructorSidebar from "./InstructorSidebar";
+import StudentSidebar from "./StudentSidebar";
 
 export default function Layout({
   children,
@@ -32,15 +32,13 @@ export default function Layout({
     return null;
   };
 
-  const sidebar = sidebarContent();
-
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {renderHeader()}
       <div className="flex flex-1">
-        {sidebar && (
+        {showSidebar && (
           <aside className="w-64 bg-gray-50 border-r border-gray-200 p-6">
-            {sidebar}
+            {sidebarContent()}
           </aside>
         )}
         <main className="flex-1 p-8">{children}</main>

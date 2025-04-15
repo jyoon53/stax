@@ -1,3 +1,4 @@
+// pages/instructor-dashboard.js
 import { useEffect, useState } from "react";
 
 export default function InstructorDashboard() {
@@ -22,7 +23,7 @@ export default function InstructorDashboard() {
       title: newLessonTitle,
       description: newLessonDesc,
       totalExercises: Number(newLessonExercises),
-      students: [], // Ensure new lessons have a students array
+      students: [],
     };
     setLessons([...lessons, newLesson]);
     setNewLessonTitle("");

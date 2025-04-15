@@ -1,3 +1,4 @@
+// pages/progress.js
 export default function Progress() {
   return (
     <div className="p-8 text-black">

@@ -1,3 +1,4 @@
+// pages/login.js
 import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -8,13 +9,12 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    // Save the user type for persistence
     localStorage.setItem("userType", userType);
     // Redirect based on the selected role
     if (userType === "student") {
-      await router.push("/student-dashboard");
+      router.push("/student-dashboard");
     } else {
-      await router.push("/instructor-dashboard");
+      router.push("/instructor-dashboard");
     }
   };
 

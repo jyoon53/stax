@@ -1,3 +1,4 @@
+// pages/upload-lesson.js
 export default function UploadLesson() {
   return (
     <div className="p-8 text-black">
