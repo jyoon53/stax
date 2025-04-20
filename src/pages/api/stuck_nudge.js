@@ -1,6 +1,6 @@
 // scripts/stuck_nudge.js
 import cron from "node-cron";
-import { db } from "../lib/firebaseAdmin.js";
+import { db } from "../../../lib/firebaseAdmin.js";
 import fetch from "node-fetch";
 
 const TOAST_ENDPOINT = "http://localhost:3000/api/stuck-toast"; // implement tiny route

@@ -2,7 +2,7 @@
 import formidable from "formidable";
 import fs from "fs";
 import fetch from "node-fetch";
-import { db } from "../../lib/firebaseAdmin.js";
+import { db } from "../../../lib/firebaseAdmin.js";
 
 export const config = { api: { bodyParser: false } };
 
