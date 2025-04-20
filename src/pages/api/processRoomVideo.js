@@ -1,73 +1,64 @@
-// pages/api/processRoomVideo.js
+// src/pages/api/processRoomVideo.js
 import formidable from "formidable";
 import fs from "fs";
 import fetch from "node-fetch";
+import { db } from "../../lib/firebaseAdmin.js";
 
-export const config = {
-  api: { bodyParser: false },
-};
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method Not Allowed" });
 
-  const form = new formidable.IncomingForm();
+  const form = formidable();
   form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error("Form parse error:", err);
-      return res.status(500).json({ error: "File upload error" });
-    }
+    if (err) return res.status(500).json({ error: "Form parse error" });
 
-    const roomLogs = fields.roomLogs;
+    const lessonId = fields.lessonId ?? "draft";
+    const rawLogs = JSON.parse(fields.roomLogs || "[]");
     const file = files.video;
-    if (!file) {
-      return res.status(400).json({ error: "No video file" });
-    }
+    if (!file) return res.status(400).json({ error: "No video file" });
 
     try {
-      // read file into memory
-      const fileBuffer = fs.readFileSync(file.filepath);
+      /* 1️⃣  fetch obsT0 from Firestore */
+      const snap = await db.collection("sessions").doc(lessonId).get();
+      const obsT0 = snap.data()?.obsT0?.toMillis?.() ?? null;
+      if (!obsT0) throw new Error("obsT0 missing for session " + lessonId);
 
-      // Construct a multipart request to Python
+      /* 2️⃣  convert absolute → seconds into video */
+      rawLogs.forEach(
+        (ev) => (ev.timestampRel = (ev.timestamp - obsT0) / 1000)
+      );
+
+      /* 3️⃣  build multipart for the Python service */
       const boundary = "----BoundaryForPython";
-      const bodyParts = [
-        `--${boundary}`,
-        `Content-Disposition: form-data; name="roomLogs"`,
-        "",
-        roomLogs,
-        `--${boundary}`,
-        `Content-Disposition: form-data; name="file"; filename="${file.originalFilename}"`,
-        "Content-Type: application/octet-stream",
-        "",
-        fileBuffer,
-        `--${boundary}--`,
-        "",
-      ];
-      const multipartBody = Buffer.from(bodyParts.join("\r\n"));
+      const body = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="roomLogs"\r\n\r\n${JSON.stringify(
+            rawLogs
+          )}\r\n--${boundary}\r\nContent-Disposition: form-data; name="video"; filename="${
+            file.originalFilename
+          }"\r\nContent-Type: application/octet-stream\r\n\r\n`
+        ),
+        fs.readFileSync(file.filepath),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
 
-      const pythonRes = await fetch("http://localhost:8000/clip-room-video", {
+      /* 4️⃣  send to FastAPI micro‑service */
+      const py = await fetch("http://localhost:8000/clip-room-video", {
         method: "POST",
         headers: {
           "Content-Type": `multipart/form-data; boundary=${boundary}`,
         },
-        body: multipartBody,
+        body,
       });
+      const data = await py.json();
+      if (!data.success) throw new Error(data.error);
 
-      const data = await pythonRes.json();
-      if (!data.success) {
-        return res.status(500).json({ error: data.error });
-      }
-      res.status(200).json({
-        success: true,
-        start: data.start,
-        end: data.end,
-        savedFile: data.savedFile,
-        totalDuration: data.totalDuration,
-      });
-    } catch (error) {
-      console.error("Error sending file to python microservice:", error);
-      res.status(500).json({ error: "Video processing failed" });
+      return res.json(data);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: String(e) });
     } finally {
       fs.unlink(file.filepath, () => {});
     }

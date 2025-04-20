@@ -1,9 +1,55 @@
-// pages/api/progress.js
-import { admin, db } from "../../../lib/firebaseAdmin";
+// src/pages/api/progress.js
+import { db } from "../../../lib/firebaseAdmin.js";
+import { FieldValue } from "firebase-admin/firestore";
 
+/**
+ * POST /api/progress    ← called by Roblox
+ * This route **only writes** to Firestore – it never returns data.
+ */
 export default async function handler(req, res) {
-  if (req.method === "POST") {
+  /* guard non‑POST */
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST"]);
+    return res.status(405).end("Method Not Allowed");
+  }
+
+  /* ─── DBG #1 – raw payload from Roblox ──────────────────────── */
+  console.log("DBG → raw body", req.body);
+
+  try {
+    /* pull & sanitise */
     const {
+      sessionId,
+      gameID,
+      lessonID,
+      exerciseID,
+      studentId,
+      studentName,
+      startTime = Date.now(),
+      endTime = Date.now(),
+      score = 0,
+      additionalData = {},
+      /* keep exactly what the client sent */
+      exerciseType = req.body.exerciseType ?? req.body.ExerciseType,
+    } = req.body || {};
+
+    if (!sessionId || !exerciseID || !studentId) {
+      return res
+        .status(400)
+        .json({ error: "Missing sessionId, exerciseID, or studentId" });
+    }
+
+    const duration = endTime - startTime;
+    const docId = `${sessionId}_${studentId}_${exerciseID}`;
+
+    const ref = db
+      .collection("sessions")
+      .doc(sessionId)
+      .collection("progress")
+      .doc(docId);
+
+    /* base fields everyone gets */
+    const base = {
       gameID,
       lessonID,
       exerciseID,
@@ -11,46 +57,38 @@ export default async function handler(req, res) {
       studentName,
       startTime,
       endTime,
+      duration,
       score,
       additionalData,
-      exerciseType,
-      serverTimestamp,
-    } = req.body;
-
-    console.log("Received exercise completion data:", req.body);
-
-    // Calculate duration; default to 0 if times are missing.
-    const duration = startTime && endTime ? endTime - startTime : 0;
-
-    const payload = {
-      gameId: gameID,
-      lessonId: lessonID,
-      exerciseId: exerciseID,
-      studentId,
-      studentName,
-      startTime,
-      endTime,
-      duration,
-      score: score !== undefined ? score : 0,
-      additionalData: additionalData || {},
-      exerciseType: exerciseType || "unknown",
-      serverTimestamp: serverTimestamp || Date.now(),
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
-    try {
-      const docRef = await db.collection("progress").add(payload);
-      console.log(
-        `Logged progress for student ${studentId} on exercise ${exerciseID}. Document ID: ${docRef.id}`
-      );
-      res.status(200).json({ message: "Exercise marked as complete." });
-    } catch (error) {
-      console.error("Error writing to Firestore:", error);
-      res
-        .status(500)
-        .json({ message: "Error writing to Firestore", error: error.message });
+    /* ─── DBG #2 – final exerciseType value we will try to write ── */
+    console.log("DBG ← exerciseType heading to Firestore:", exerciseType);
+
+    /* merge logic */
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      if (exerciseType !== undefined) base.exerciseType = exerciseType;
+      await ref.set(base);
+    } else {
+      const prevType = snap.data().exerciseType;
+      const delta = { ...base };
+
+      if (
+        exerciseType !== undefined &&
+        (prevType === undefined || prevType === "unknown")
+      ) {
+        delta.exerciseType = exerciseType;
+      }
+
+      await ref.update(delta);
     }
-  } else {
-    res.status(405).json({ message: "Method not allowed." });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ /api/progress error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 }

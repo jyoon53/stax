@@ -30,14 +30,12 @@ export default function StudentDashboard() {
           <p className="mb-2">
             Progress: {calculateProgress(lesson.exercises)}%
           </p>
-          <ul className="list-disc ml-6">
-            {lesson.exercises.map((exercise) => (
-              <li key={exercise.id}>
-                {exercise.title} –{" "}
-                {exercise.completed ? "Completed" : "Incomplete"}
-              </li>
-            ))}
-          </ul>
+          <div className="w-full bg-gray-300 h-4 rounded">
+            <div
+              className="bg-blue-500 h-4 rounded"
+              style={{ width: `${calculateProgress(lesson.exercises)}%` }}
+            ></div>
+          </div>
         </div>
       ))}
     </div>

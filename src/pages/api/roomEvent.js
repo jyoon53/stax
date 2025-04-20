@@ -1,34 +1,32 @@
-// pages/api/roomEvent.js
-import { admin, db } from "../../../lib/firebaseAdmin";
+import { db } from "../../../lib/firebaseAdmin.js";
+
+const OK = new Set(["enter", "exit", "flash"]);
 
 export default async function handler(req, res) {
-  if (req.method === "POST") {
-    const { eventType, roomID, timestamp, playerName } = req.body;
+  if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
 
-    // Validate required fields.
-    if (!eventType || !roomID || timestamp == null || !playerName) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+  const { sessionId, eventType, roomID, playerName, timestamp } =
+    req.body || {};
 
-    const payload = {
-      eventType,
-      roomID,
-      timestamp,
-      playerName,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+  if (!sessionId || !OK.has(eventType) || !roomID)
+    return res.status(400).json({ error: "Bad payload" });
 
-    try {
-      const docRef = await db.collection("roomEvents").add(payload);
-      console.log(
-        `Room event logged: ${eventType} in room ${roomID} by ${playerName}. Document ID: ${docRef.id}`
-      );
-      res.status(200).json({ success: true });
-    } catch (error) {
-      console.error("Error writing room event to Firestore:", error);
-      res.status(500).json({ error: error.message });
-    }
-  } else {
-    res.status(405).json({ error: "Method not allowed" });
+  try {
+    await db
+      .collection("sessions")
+      .doc(sessionId)
+      .collection("roomEvents")
+      .add({
+        eventType,
+        roomID,
+        playerName: playerName ?? null,
+        timestamp: timestamp ?? Date.now(),
+        createdAt: db.FieldValue.serverTimestamp(),
+      });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
   }
 }

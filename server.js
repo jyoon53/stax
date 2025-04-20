@@ -1,4 +1,9 @@
-// server.js
+/* ─── ❶ LOAD .env.local BEFORE _any_ other import ───────────────────────── */
+import { config as loadEnv } from "dotenv"; // <‑‑ this line must be FIRST
+loadEnv({ path: ".env.local" });
+// (If you want to be explicit:  import 'dotenv/config?path=.env.local';)
+
+/* ─── rest of your original server.js ───────────────────────────────────── */
 import { createServer } from "http";
 import next from "next";
 import express from "express";
@@ -14,31 +19,23 @@ app.prepare().then(() => {
   server.use(cors());
   server.use(express.json());
 
-  // Create HTTP server and attach Express
   const httpServer = createServer(server);
 
-  // Set up Socket.IO for real-time communication
   const io = new Server(httpServer, { cors: { origin: "*" } });
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
-    socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.id);
-    });
+    socket.on("disconnect", () => console.log("User disconnected:", socket.id));
   });
 
-  // Make io accessible in API routes via req.io
-  server.use((req, res, nextMiddleware) => {
+  server.use((req, res, next) => {
     req.io = io;
-    nextMiddleware();
+    next();
   });
 
-  // Handle all Next.js requests
-  server.all("*", (req, res) => {
-    return handle(req, res);
-  });
+  server.all("*", (req, res) => handle(req, res));
 
   const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-  });
+  httpServer.listen(PORT, () =>
+    console.log(`Server is running on http://localhost:${PORT}`)
+  );
 });
