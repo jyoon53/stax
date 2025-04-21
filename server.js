@@ -1,41 +1,61 @@
-/* ─── ❶ LOAD .env.local BEFORE _any_ other import ───────────────────────── */
-import { config as loadEnv } from "dotenv"; // <‑‑ this line must be FIRST
-loadEnv({ path: ".env.local" });
-// (If you want to be explicit:  import 'dotenv/config?path=.env.local';)
+/**************************************************************************
+ * server.js – custom Next.js + Express server with Socket.IO
+ * ------------------------------------------------------------------------
+ * • Loads `.env.local` **before** any other imports so all libraries see
+ *   your environment variables (Firebase, OBS, etc.).
+ * • Wraps the Express instance in `http.createServer` to attach Socket.IO.
+ * • Adds CORS + JSON body‑parsing middleware for any custom REST routes.
+ **************************************************************************/
 
-/* ─── rest of your original server.js ───────────────────────────────────── */
+/* ❶ Load env vars first (must be top‑of‑file) */
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.local" }); // fallback to .env if not found
+
+/* ❷ Now import the rest */
 import { createServer } from "http";
 import next from "next";
 import express from "express";
 import cors from "cors";
-import { Server } from "socket.io";
+import { Server as SocketServer } from "socket.io";
 
+/* ❸ Next.js prep */
 const dev = process.env.NODE_ENV !== "production";
-const app = next({ dev });
-const handle = app.getRequestHandler();
+const nextApp = next({ dev });
+const handle = nextApp.getRequestHandler();
 
-app.prepare().then(() => {
-  const server = express();
-  server.use(cors());
-  server.use(express.json());
+nextApp.prepare().then(() => {
+  /* ❹ Express + HTTP server */
+  const app = express();
 
-  const httpServer = createServer(server);
+  app.use(cors());
+  app.use(express.json());
 
-  const io = new Server(httpServer, { cors: { origin: "*" } });
-  io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
-    socket.on("disconnect", () => console.log("User disconnected:", socket.id));
+  const httpServer = createServer(app);
+
+  /* ❺ Socket.IO */
+  const io = new SocketServer(httpServer, {
+    cors: { origin: "*" },
   });
 
-  server.use((req, res, next) => {
+  io.on("connection", (socket) => {
+    console.log("🔌 Socket connected", socket.id);
+    socket.on("disconnect", () =>
+      console.log("🔌 Socket disconnected", socket.id)
+    );
+  });
+
+  /* Make `io` available in any custom route via req.io */
+  app.use((req, _res, next) => {
     req.io = io;
     next();
   });
 
-  server.all("*", (req, res) => handle(req, res));
+  /* ❻ Next.js catch‑all routes */
+  app.all("*", (req, res) => handle(req, res));
 
+  /* ❼ Start listening */
   const PORT = process.env.PORT || 3000;
   httpServer.listen(PORT, () =>
-    console.log(`Server is running on http://localhost:${PORT}`)
+    console.log(`🚀 Server ready → http://localhost:${PORT}`)
   );
 });

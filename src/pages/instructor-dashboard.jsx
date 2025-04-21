@@ -1,89 +1,90 @@
+// src/pages/instructor-dashboard.jsx
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
-/* helpers to cache id in browser */
-function saveSession(id) {
-  localStorage.setItem("sessionId", id);
-}
-function currentSession() {
-  return localStorage.getItem("sessionId") || null;
-}
+/* localStorage helpers ----------------------------------------------------- */
+const saveSession = (id) =>
+  typeof window !== "undefined" && localStorage.setItem("sessionId", id);
+const getSession = () =>
+  typeof window !== "undefined" ? localStorage.getItem("sessionId") : null;
 
-/* main component */
+/* -------------------------------------------------------------------------- */
 export default function InstructorDashboard() {
   const [lessons, setLessons] = useState([]);
-  const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [exCount, setExCount] = useState(0);
-  const [recState, setRecState] = useState("idle"); // idle | starting | recording | stopping
+  const [sessionId, setSession] = useState(null);
+  const [recState, setState] = useState("idle"); // idle|starting|recording|stopping
+  const [errMsg, setError] = useState("");
 
-  /* fetch sample lessons (demo) */
+  /* hydrate lessons + sessionId ------------------------------------------- */
+  useEffect(() => setSession(getSession()), []);
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/lessons");
-      setLessons(await res.json());
+      try {
+        const r = await fetch("/api/lessons", { cache: "no-store" });
+        if (!r.ok) throw new Error(await r.text());
+        setLessons(await r.json());
+      } catch (e) {
+        console.error(e);
+        setError("Unable to load lessons.");
+      }
     })();
   }, []);
 
-  /* quick client‑side lesson list (demo only) */
-  function addLesson(e) {
-    e.preventDefault();
-    setLessons((ls) => [
-      ...ls,
-      {
-        id: ls.length + 1,
-        title,
-        description: desc,
-        totalExercises: Number(exCount),
-        students: [],
-      },
-    ]);
-    setTitle("");
-    setDesc("");
-    setExCount(0);
-  }
-
-  /* Start / Stop button handler */
+  /* ---------------------------------------------------------------------- */
   async function toggleRecording() {
     const wantStop = recState === "recording";
-    setRecState(wantStop ? "stopping" : "starting");
-    try {
-      const res = await fetch("/api/start-recording", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: wantStop ? "stop" : "start" }),
-      });
-      const { success, error, sessionId } = await res.json();
-      if (!success) throw new Error(error);
-      if (sessionId) saveSession(sessionId);
-      setRecState(wantStop ? "idle" : "recording");
-      if (wantStop) {
-        // we just stopped → done
-        setRecState("idle");
-        return;
-      }
+    setState(wantStop ? "stopping" : "recording"); // optimistic flip
+    setError("");
 
-      /* we just *started* – wait until OBS really begins */
-      for (let i = 0; i < 10; i++) {
-        // ~10 s max
-        const s = await fetch("/api/obs-status").then((r) => r.json());
-        if (s.recording) {
-          setRecState("recording");
-          return;
+    /* 1 — fire‑and‑forget fetch (no await) ------------------------------- */
+    fetch("/api/start-recording", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: wantStop ? "stop" : "start" }),
+      cache: "no-store",
+    })
+      .then((res) => res.json())
+      .then(({ success, error, sessionId: sid }) => {
+        if (!success) throw new Error(error);
+        if (sid) {
+          saveSession(sid);
+          setSession(sid);
         }
-        await new Promise((r) => setTimeout(r, 1000));
+      })
+      .catch((e) => {
+        console.error(e);
+        setState("idle");
+        setError(e.message);
+      });
+
+    /* 2 — in parallel poll /api/obs-status until OBS confirms ----------- */
+    if (!wantStop) {
+      let ok = false;
+      for (let i = 0; i < 20; i++) {
+        // 20 × 500 ms = 10 s
+        const { recording } = await fetch("/api/obs-status", {
+          cache: "no-store",
+        }).then((r) => r.json());
+        if (recording) {
+          ok = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
       }
-      throw new Error("OBS never entered recording mode (timeout)");
-    } catch (err) {
-      console.error(err);
-      alert(`Recording error: ${err.message}`);
-      setRecState("idle");
+      if (!ok) {
+        setState("idle");
+        setError("OBS did not report recording within 10 s.");
+      }
+    } else {
+      setState("idle"); // optimistic stop
     }
   }
 
+  /* UI helpers ------------------------------------------------------------ */
   const label = {
     idle: "Start Recording",
-    starting: "Starting…",
     recording: "Stop Recording",
+    starting: "Starting…", // never displayed now (kept for completeness)
     stopping: "Stopping…",
   }[recState];
 
@@ -94,25 +95,51 @@ export default function InstructorDashboard() {
       ? "bg-green-600 hover:bg-green-700"
       : "bg-gray-400 cursor-not-allowed";
 
+  /* ------------------------------ render --------------------------------- */
   return (
-    <div className="p-8 text-black">
+    <section className="p-8 text-black">
       <h1 className="text-3xl font-bold mb-6">Instructor Dashboard</h1>
 
       <button
         onClick={toggleRecording}
-        disabled={recState === "starting" || recState === "stopping"}
+        disabled={recState === "stopping"}
         className={`mb-6 text-white py-2 px-4 rounded ${btnCls}`}
       >
         {label}
       </button>
 
-      <p className="mb-8 text-sm text-gray-600">
-        Current session:&nbsp;
-        <code>{currentSession() || "—"}</code>
+      <p className="mb-6 text-sm text-gray-600">
+        Current session:&nbsp;<code>{sessionId || "—"}</code>
       </p>
 
-      {/* lesson upload form (demo UI) */}
-      {/* …unchanged UI code below … */}
-    </div>
+      {errMsg && (
+        <p className="mb-6 text-red-600">
+          <strong>Error:</strong> {errMsg}
+        </p>
+      )}
+
+      <h2 className="text-2xl font-semibold mb-4">My Lessons</h2>
+      {lessons.length === 0 && (
+        <p>No lessons yet. Record one to get started!</p>
+      )}
+
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {lessons.map((l) => (
+          <Link
+            key={l.id}
+            href="#"
+            className="border rounded-lg p-6 hover:shadow-md transition"
+          >
+            <h3 className="text-xl font-semibold mb-1">{l.title}</h3>
+            <p className="text-sm text-gray-700 line-clamp-3">
+              {l.description}
+            </p>
+            <p className="text-xs text-gray-500 mt-4">
+              {l.exercises?.length || 0} exercises
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

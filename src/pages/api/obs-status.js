@@ -1,19 +1,23 @@
-import { obs } from "../../../obs-controller/obs_controller.js";
+// src/pages/api/obs-status.js
+import { status } from "../../../lib/obs.js";
 
+/**
+ * GET /api/obs-status
+ * → { connected, recording, file }
+ */
 export default async function handler(req, res) {
-  try {
-    if (!obs.connected) {
-      // dev‑mode hot‑reload drops the socket – reconnect quickly
-      await obs.connect(
-        process.env.OBS_ADDRESS || "ws://localhost:4455",
-        process.env.OBS_PASSWORD || ""
-      );
-    }
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
 
-    const { outputActive } = await obs.call("GetRecordStatus");
-    res.json({ recording: outputActive });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ recording: false, error: String(e) });
+  try {
+    const s = await status(); // { connected, recording, file }
+    res.json(s);
+  } catch (err) {
+    console.error("❌ /obs-status error:", err);
+    res
+      .status(500)
+      .json({ connected: false, recording: false, error: err.message });
   }
 }
