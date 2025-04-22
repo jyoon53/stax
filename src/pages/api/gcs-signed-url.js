@@ -1,6 +1,7 @@
 // pages/api/gcs-signed-url.js
 // -----------------------------------------------------------------------------
-// Issue a signed PUT URL so the instructor can upload the master recording.
+// Issue a signed PUT URL so the instructor can upload the master recording,
+// then trigger the Cloud Run slicer service to generate clips.
 // -----------------------------------------------------------------------------
 
 import { cert, getApps, initializeApp } from "firebase-admin/app";
@@ -15,7 +16,10 @@ if (!BUCKET_NAME)
     'Missing env var CLIP_BUCKET (e.g. "roblox-lms.firebasestorage.app")'
   );
 
-/* 2. Init Admin SDK (singleton) ------------------------------------------- */
+/* 2. Cloud Run slicer endpoint ------------------------------------------------ */
+const SLICER_URL = process.env.SLICER_URL?.trim(); // e.g. "https://slicer-demo-xyz.a.run.app"
+
+/* 3. Init Admin SDK (singleton) ------------------------------------------- */
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
 if (getApps().length === 0) {
   initializeApp({
@@ -25,7 +29,7 @@ if (getApps().length === 0) {
 }
 const bucket = getStorage().bucket(BUCKET_NAME);
 
-/* 3. API route ------------------------------------------------------------- */
+/* 4. API route ------------------------------------------------------------- */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
@@ -43,11 +47,9 @@ export default async function handler(req, res) {
 
   /* ── Extract + sanitise payload ─────────────────────────────────────── */
   let { lessonId, contentType, title = "", description = "" } = req.body || {};
-
   if (!lessonId || !contentType)
     return res.status(400).end("Missing lessonId or contentType");
 
-  // ── Sanitise lessonId (no spaces, no strange chars) ────────────────────
   lessonId = String(lessonId)
     .trim()
     .replace(/[^\w-]/g, "_");
@@ -76,6 +78,22 @@ export default async function handler(req, res) {
     { merge: true }
   );
 
-  /* ── Respond ────────────────────────────────────────────────────────── */
+  await db
+    .doc(`sessions/${lessonId}`)
+    .set({ obsT0: FieldValue.serverTimestamp() }, { merge: true });
+
+  /* ── Trigger slicing via Cloud Run (fire-and-forget) ───────────────────── */
+  if (SLICER_URL) {
+    fetch(`${SLICER_URL}/slice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: lessonId,
+        bucket: BUCKET_NAME,
+      }),
+    }).catch((err) => console.error("Slicer service error:", err));
+  }
+
+  /* ── Respond to client ────────────────────────────────────────────────── */
   res.json({ url, objectKey });
 }
