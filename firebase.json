@@ -17,5 +17,10 @@
   },
   "dataconnect": {
     "source": "dataconnect"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "python311",
+    "ignore": ["node_modules", ".venv"]
   }
 }
