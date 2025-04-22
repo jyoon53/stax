@@ -1,25 +1,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { initializeApp, getApps } from "firebase/app";
 import {
-  getFirestore,
   collection,
   getDocs,
   QueryDocumentSnapshot,
   DocumentData,
 } from "firebase/firestore";
-
-/* ---------- Firebase init (client‑only) ---------- */
-let db: ReturnType<typeof getFirestore>;
-if (typeof window !== "undefined") {
-  const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  };
-  if (getApps().length === 0) initializeApp(firebaseConfig);
-  db = getFirestore();
-}
+import { db } from "../../../lib/firebaseClient";
 
 /* ------------ Types --------------- */
 interface LessonCard {
@@ -34,7 +21,7 @@ export default function Lessons() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!db) return; // running on the server; skip
+    if (!db) return; // SSR pass – skip
     (async () => {
       const snap = await getDocs(collection(db, "lessons"));
       const list: LessonCard[] = snap.docs.map(
