@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+/* 8‑char hex ‑ same format your Roblox session IDs use */
+const ID_RE = /^[0-9a-f]{8}$/i;
+
 export default function UploadLessonPage() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -13,29 +16,19 @@ export default function UploadLessonPage() {
     e.preventDefault();
     if (!file) return;
 
+    /* ── 1 · derive lessonId from file name ───────────────────────── */
+    const lessonId = file.name.replace(/\.[^.]+$/, "").toLowerCase(); // strip .mov/.mp4
+
+    if (!ID_RE.test(lessonId)) {
+      setMsg("✗ File name must be the 8‑char sessionId, e.g. 39cd3bfe.mov");
+      return;
+    }
+
     setBusy(true);
     setPct(0);
     setMsg("");
 
-    /* ── 1 · derive the lesson / session ID ───────────────────────── */
-    const lessonId: string | null =
-      /* primary source — saved at “Start Recording” */
-      localStorage.getItem("currentSessionId") ||
-      /* secondary — cookie set by /api/start-recording */
-      document.cookie.match(/(?:^|;\s*)sessionId=([^;]+)/)?.[1] ||
-      /* last‑resort – derive from filename (e.g. 39cd3bfe.mov) */
-      file.name.replace(/\.[^.]+$/, "") ||
-      null;
-
-    if (!lessonId) {
-      setBusy(false);
-      setMsg(
-        "✗ No active recording session found – press “Start Recording” first"
-      );
-      return;
-    }
-
-    /* ── 2 · ask backend for signed PUT URL ───────────────────────── */
+    /* ── 2 · get signed PUT URL ───────────────────────────────────── */
     const metaRes = await fetch("/api/gcs-signed-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,7 +47,7 @@ export default function UploadLessonPage() {
     }
     const { url } = await metaRes.json();
 
-    /* ── 3 · stream file direct to Cloud Storage ──────────────────── */
+    /* ── 3 · PUT the file directly to Cloud Storage ───────────────── */
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
