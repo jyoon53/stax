@@ -46,8 +46,12 @@ export default async function handler(req, res) {
     return res.status(405).end("Method Not Allowed");
   }
 
+  console.log("🔧 Upload handler using BUCKET_NAME =", BUCKET_NAME);
+
   /* ── Extract + sanitize payload ─────────────────────────────────────── */
   let { lessonId, contentType, title = "", description = "" } = req.body || {};
+  console.log("🔧 Payload:", { lessonId, contentType, title, description });
+
   if (!lessonId || !contentType) {
     return res.status(400).end("Missing lessonId or contentType");
   }
@@ -61,13 +65,14 @@ export default async function handler(req, res) {
 
   const objectKey = `master/${lessonId}.mp4`;
 
-  /* ── Create signed PUT URL (15 min) ─────────────────────────────────── */
+  /* ── Create signed PUT URL (15 min) ─────────────────────────────────── */
   const [url] = await bucket.file(objectKey).getSignedUrl({
     version: "v4",
     action: "write",
     expires: Date.now() + 15 * 60 * 1000,
     contentType,
   });
+  console.log("🔧 Generated signed URL for", objectKey);
 
   /* ── Seed Firestore so UI can show progress ─────────────────────────── */
   await db.doc(`lessons/${lessonId}`).set(
@@ -81,29 +86,37 @@ export default async function handler(req, res) {
     },
     { merge: true }
   );
+  console.log("🔧 Seeded lessons/%s", lessonId);
+
   await db
     .doc(`sessions/${lessonId}`)
     .set({ obsT0: FieldValue.serverTimestamp() }, { merge: true });
+  console.log("🔧 Seeded sessions/%s.obsT0", lessonId);
 
   /* ── Trigger slicing via Cloud Run (await to ensure request fires) ───── */
   if (SLICER_URL) {
-    console.log("Calling slicer service at:", SLICER_URL);
+    console.log(
+      "🚀 Triggering slicer service at:",
+      SLICER_URL,
+      "for bucket:",
+      BUCKET_NAME
+    );
     try {
       const sliceRes = await fetch(`${SLICER_URL}/slice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: lessonId, bucket: BUCKET_NAME }),
       });
-      console.log("Slice service response status:", sliceRes.status);
+      console.log("🚀 Slice service response status:", sliceRes.status);
       if (!sliceRes.ok) {
         const errText = await sliceRes.text();
-        console.error("Slice service responded with error:", errText);
+        console.error("❗ Slice service error:", errText);
       }
     } catch (err) {
-      console.error("Failed to call slicer service:", err);
+      console.error("❗ Failed to call slicer service:", err);
     }
   } else {
-    console.warn("SLICER_URL not set, skipping slicing trigger.");
+    console.warn("⚠️  SLICER_URL not set, skipping slicing trigger.");
   }
 
   /* ── Respond to client ────────────────────────────────────────────────── */
