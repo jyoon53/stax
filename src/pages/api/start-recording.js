@@ -1,9 +1,4 @@
 // src/pages/api/start-recording.js
-// -----------------------------------------------------------------------------
-// POST /api/start-recording
-// Body: { action: "start" | "stop", lessonId?: "my‑lesson" }
-// -----------------------------------------------------------------------------
-
 import { v4 as uuid } from "uuid";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../../../lib/firebaseAdmin.js";
@@ -11,7 +6,6 @@ import { start, stop, status as obsStatus } from "../../../lib/obs.js";
 import { sendRobloxMessage } from "../../../lib/robloxOpenCloud.js";
 
 export default async function handler(req, res) {
-  /* ── enforce method ─────────────────────────────────────────────── */
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -25,57 +19,68 @@ export default async function handler(req, res) {
   }
 
   try {
-    /* ── resolve / create cookie‑based session id ─────────────────── */
+    /* cookie‑based id */
     let sessionId = req.cookies.sessionId;
     if (action === "start" || !sessionId) sessionId = uuid().slice(0, 8);
 
-    /* ───────────────────── START branch ──────────────────────────── */
+    /* ─────────── START ─────────── */
     if (action === "start") {
-      /* 1️⃣  create / merge the session doc *first*  */
-      await db.collection("sessions").doc(sessionId).set(
-        {
-          lessonId,
-          obsT0: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      /* 2️⃣  publish the id to Roblox right away     */
-      await sendRobloxMessage("lms-session", sessionId);
-
-      /* 3️⃣  finally do the potentially slow OBS handshake */
-      await start(); // throws if OBS unreachable
-    }
-
-    /* ───────────────────── STOP branch ───────────────────────────── */
-    if (action === "stop") {
-      await stop();
-
-      const { file } = await obsStatus(); // may be null if OBS disabled paths
       await db
         .collection("sessions")
         .doc(sessionId)
         .set(
-          {
-            masterVideoPath: file ?? null,
-            stoppedAt: FieldValue.serverTimestamp(),
-          },
+          { lessonId, obsT0: FieldValue.serverTimestamp() },
           { merge: true }
         );
+
+      try {
+        await sendRobloxMessage("lms-session", sessionId);
+        console.log("LMS → OpenCloud ✅ sent", sessionId);
+      } catch (err) {
+        console.warn("▶︎ OpenCloud publish skipped:", err.message);
+      }
+
+      try {
+        await start();
+      } catch {
+        console.warn("▶︎ OBS not reachable – continuing without recording");
+      }
     }
 
-    /* ── final OBS status (for UI) ────────────────────────────────── */
-    const { recording } = await obsStatus();
+    /* ─────────── STOP ──────────── */
+    if (action === "stop") {
+      await stop().catch(() => {});
 
-    /* ── set / refresh cookie + JSON response ─────────────────────── */
+      let file;
+      try {
+        ({ file } = await obsStatus());
+      } catch {
+        /* leave undefined */
+      }
+      const update = { stoppedAt: FieldValue.serverTimestamp() };
+      if (file !== undefined) update.masterVideoPath = file;
+
+      await db
+        .collection("sessions")
+        .doc(sessionId)
+        .set(update, { merge: true });
+    }
+
+    /* final status (never throws) */
+    let recording = false;
+    try {
+      ({ recording } = await obsStatus());
+    } catch {
+      /* keep false */
+    }
+
     res.setHeader(
       "Set-Cookie",
       `sessionId=${sessionId}; Path=/; SameSite=Lax; Max-Age=86400`
     );
-
     return res.json({ success: true, sessionId, action, recording });
   } catch (err) {
-    console.error("❌ /start-recording error:", err);
+    console.error("❌ /start-recording fatal:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }
