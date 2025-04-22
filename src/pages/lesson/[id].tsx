@@ -1,6 +1,9 @@
-// src/pages/lesson/[id].tsx
+/*  src/pages/lesson/[id].tsx  */
 import { useRouter } from "next/router";
 import { useMemo } from "react";
+import Head from "next/head";
+import Link from "next/link";
+
 import {
   doc,
   FirestoreDataConverter,
@@ -9,45 +12,44 @@ import {
   SnapshotOptions,
 } from "firebase/firestore";
 import { useDocumentData } from "react-firebase-hooks/firestore";
-import Head from "next/head";
-import Link from "next/link";
-import { db } from "../../../lib/firebaseClient"; // adjust alias if different
 
-/* ── Firestore types ─────────────────────────────────────────────── */
+import { db } from "../../../lib/firebaseClient";
+
+/* ─────────────────── Firestore domain types ──────────────────── */
 interface Chapter {
   roomId: string;
   clipUrl: string;
 }
+
 interface Lesson {
   title: string;
   description?: string;
   chapters: Chapter[];
 }
 
-/* ── Firestore converter (no ‘any’) ──────────────────────────────── */
-const cv: FirestoreDataConverter<Lesson> = {
-  toFirestore: (l: Lesson) => l,
-
-  // ⚠️  use `opts` instead of `_opts` and pass it to .data()
-  fromFirestore: (
-    snapshot: QueryDocumentSnapshot,
-    opts: SnapshotOptions
-  ): Lesson => snapshot.data(opts) as Lesson,
+/* ───────────────── Firestore converter (no “any”) ─────────────── */
+const lessonConverter: FirestoreDataConverter<Lesson> = {
+  toFirestore: (lesson: Lesson) => lesson,
+  fromFirestore: (snap: QueryDocumentSnapshot, opts: SnapshotOptions): Lesson =>
+    snap.data(opts) as Lesson,
 };
 
+/* ─────────────────────── React page ───────────────────────────── */
 export default function LessonPlayer() {
   const { query } = useRouter();
 
-  /* Create ref only when router is ready */
-  const ref = useMemo<DocumentReference<Lesson> | null>(() => {
+  /* build the doc ref only once router has the id */
+  const lessonRef: DocumentReference<Lesson> | null = useMemo(() => {
     if (!query.id) return null;
-    return doc(db, "lessons", String(query.id)).withConverter(cv);
+    return doc(db, "lessons", String(query.id)).withConverter(lessonConverter);
   }, [query.id]);
 
-  /* Hook short‑circuits if ref is null */
-  const [lesson, loading] = useDocumentData<Lesson>(ref ?? undefined);
+  /* react‑firebase‑hooks handles `undefined` refs gracefully */
+  const [lesson, loading] = useDocumentData<Lesson>(lessonRef ?? undefined);
 
-  if (loading || !lesson) return <p className="p-8">Loading…</p>;
+  if (loading || !lesson) {
+    return <p className="p-8">Loading…</p>;
+  }
 
   return (
     <>
