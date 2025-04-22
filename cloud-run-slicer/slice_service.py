@@ -22,24 +22,28 @@ def slice_video():
         if not session_id or not bucket_name:
             raise ValueError("Missing sessionId or bucket in request")
 
-        # 1) Download master (try .mp4, then .mov)
+        # 1) Download master (list existing blobs for debugging)
         client = storage.Client()
         bucket = client.bucket(bucket_name)
         tmpdir = tempfile.mkdtemp()
         logging.debug(f"Created temporary dir {tmpdir}")
+
+        # List all blobs under master/ prefix to see what's present
+        blobs = list(bucket.list_blobs(prefix=f"master/{session_id}"))
+        logging.debug(f"Existing master blobs: {[b.name for b in blobs]}")
+
         local_master = None
-        for ext in [".mp4", ".mov"]:
-            key = f"master/{session_id}{ext}"
-            blob = bucket.blob(key)
-            logging.debug(f"Checking blob existence: {key}")
-            if blob.exists():
-                local_master = pathlib.Path(tmpdir) / f"{session_id}{ext}"
-                logging.info(f"⬇️ Found master file with extension {ext}, downloading to {local_master}")
-                blob.download_to_filename(local_master)
-                logging.info("Download complete.")
-                break
+        # Download the first matching blob
+        for blob in blobs:
+            ext = pathlib.Path(blob.name).suffix
+            local_master = pathlib.Path(tmpdir) / f"{session_id}{ext}"
+            logging.info(f"⬇️ Downloading {blob.name} to {local_master}")
+            blob.download_to_filename(local_master)
+            logging.info("Download complete.")
+            break
+
         if local_master is None:
-            msg = f"No master video found at master/{session_id}.mp4 or .mov in {bucket_name}"
+            msg = f"No master video found for session '{session_id}' in bucket '{bucket_name}'"
             logging.error(msg)
             return jsonify({"status": "error", "message": msg}), 404
 
