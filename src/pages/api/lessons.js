@@ -1,17 +1,3 @@
-// src/pages/api/lessons.js
-// -----------------------------------------------------------------------------
-// GET /api/lessons               → returns *all* lessons with embedded exercises
-// GET /api/lessons?id=<lessonId> → returns a single lesson
-//
-// Firestore layout assumed:
-//
-//   lessons/{lessonId}
-//     ├─ title, description, createdAt, …
-//     └─ exercises/{exerciseId}
-//          ├─ title, order, …
-//
-// -----------------------------------------------------------------------------
-
 import { db } from "../../../lib/firebaseAdmin.js";
 
 export default async function handler(req, res) {
@@ -22,50 +8,38 @@ export default async function handler(req, res) {
 
   const { id: lessonId } = req.query;
 
+  /* helper to pull exercises for one lesson */
+  async function hydrate(docSnap) {
+    const lesson = { id: docSnap.id, ...docSnap.data() };
+
+    const exSnap = await docSnap.ref
+      .collection("exercises")
+      .orderBy("order", "asc")
+      .get();
+
+    lesson.exercises = exSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return lesson;
+  }
+
   try {
-    // ───────────────────────────────────────────────────────────────
-    // 1) Helper to load one lesson + its exercises
-    // ───────────────────────────────────────────────────────────────
-    async function hydrate(docSnap) {
-      const lesson = { id: docSnap.id, ...docSnap.data() };
-
-      const exSnap = await docSnap.ref
-        .collection("exercises")
-        .orderBy("order", "asc") // optional: order field
-        .get();
-
-      lesson.exercises = exSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-
-      return lesson;
-    }
-
-    // ───────────────────────────────────────────────────────────────
-    // 2) Single lesson request
-    // ───────────────────────────────────────────────────────────────
+    /* single lesson */
     if (lessonId) {
       const doc = await db.collection("lessons").doc(lessonId).get();
-      if (!doc.exists) {
+      if (!doc.exists)
         return res.status(404).json({ error: "Lesson not found" });
-      }
-      const lesson = await hydrate(doc);
-      return res.json(lesson);
+      return res.json(await hydrate(doc));
     }
 
-    // ───────────────────────────────────────────────────────────────
-    // 3) All lessons
-    // ───────────────────────────────────────────────────────────────
+    /* all lessons, newest first */
     const snap = await db
       .collection("lessons")
-      .orderBy("createdAt", "desc")
+      .orderBy("updatedAt", "desc") // field now guaranteed
+      .limit(50)
       .get();
-    const lessons = await Promise.all(snap.docs.map(hydrate));
 
-    return res.json(lessons);
+    return res.json(await Promise.all(snap.docs.map(hydrate)));
   } catch (err) {
     console.error("❌ /lessons error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }

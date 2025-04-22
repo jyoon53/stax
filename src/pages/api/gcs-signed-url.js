@@ -1,32 +1,44 @@
-// pages/api/gcs-signed-url.js
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../../../lib/firebaseAdmin";
+import { db } from "../../../lib/firebaseAdmin.js";
 
+/* ── 1. Resolve bucket name (env‑var required) ───────────────────────── */
+const BUCKET_NAME = process.env.CLIP_BUCKET; // <- alias OK
+
+if (!BUCKET_NAME)
+  throw new Error(
+    'CLIP_BUCKET env var is missing (e.g. "roblox-lms.firebasestorage.app")'
+  );
+
+/* ── 2. Initialise Admin SDK once ────────────────────────────────────── */
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
 
 if (getApps().length === 0) {
   initializeApp({
     credential: cert(serviceAccount),
-    storageBucket:
-      process.env.CLIP_BUCKET || `${serviceAccount.project_id}.appspot.com`,
+    storageBucket: BUCKET_NAME, // ← alias used here
   });
 }
-const bucket = getStorage().bucket();
 
+/* Always pass the exact same string */
+const bucket = getStorage().bucket(BUCKET_NAME);
+
+/* ── 3. API handler ─────────────────────────────────────────────────── */
 export default async function handler(req, res) {
   /* CORS pre‑flight */
   if (req.method === "OPTIONS") {
     res
       .setHeader("Access-Control-Allow-Origin", "*")
-      .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+      .setHeader("Access-Control-Allow-Headers", "Content-Type")
       .setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
     return res.status(204).end();
   }
 
-  if (req.method !== "POST")
-    return res.status(405).setHeader("Allow", ["POST"]).end();
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST", "OPTIONS"]);
+    return res.status(405).end("Method Not Allowed");
+  }
 
   const {
     lessonId,
@@ -45,13 +57,14 @@ export default async function handler(req, res) {
     contentType,
   });
 
-  /* Firestore stub so card can show “uploading…” */
+  /* Firestore stub so UI shows progress */
   await db.doc(`lessons/${lessonId}`).set(
     {
       title,
       description,
       status: "uploading",
-      masterVideoPath: `gs://${bucket.name}/master/${lessonId}.mp4`,
+      masterVideoPath: `gs://${BUCKET_NAME}/master/${lessonId}.mp4`,
+      createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
