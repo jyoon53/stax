@@ -5,6 +5,11 @@ import { db } from "../../../lib/firebaseAdmin.js";
 import { start, stop, status as obsStatus } from "../../../lib/obs.js";
 import { sendRobloxMessage } from "../../../lib/robloxOpenCloud.js";
 
+const { sessionId } = await fetch("/api/start-recording", {
+  method: "POST",
+}).then((r) => r.json());
+localStorage.setItem("currentSessionId", sessionId);
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);

@@ -1,16 +1,16 @@
+// pages/upload-lesson.tsx
 import { useState } from "react";
 
 export default function UploadLessonPage() {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [pct, setPct] = useState(0); // 0 – 100 %
+  const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState("");
 
-  /* -------------- form submit ----------------------------------------- */
-  async function handleSubmit(e) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
 
@@ -18,15 +18,34 @@ export default function UploadLessonPage() {
     setPct(0);
     setMsg("");
 
-    const fd = new FormData();
-    fd.append("video", file);
-    fd.append("title", title);
-    fd.append("description", desc);
+    /* ① ask backend for a signed PUT URL -------------------------- */
+    const lessonId =
+      localStorage.getItem("currentSessionId") || Date.now().toString(36);
 
-    /* XMLHttpRequest so we can read upload.onprogress */
-    await new Promise((resolve, reject) => {
+    const metaRes = await fetch("/api/gcs-signed-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lessonId,
+        contentType: file.type || "video/mp4",
+        title,
+        description: desc,
+      }),
+    });
+
+    if (!metaRes.ok) {
+      setBusy(false);
+      setMsg("✗ Failed to get upload URL");
+      return;
+    }
+
+    const { url } = await metaRes.json();
+
+    /* ② stream file direct to GCS --------------------------------- */
+    await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/upload-lesson"); // ASCII hyphen ✅
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
 
       xhr.upload.onprogress = (ev) => {
         if (ev.lengthComputable) {
@@ -34,28 +53,17 @@ export default function UploadLessonPage() {
         }
       };
 
-      xhr.onload = () => {
-        try {
-          const js = JSON.parse(xhr.responseText || "{}");
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setMsg(`✓ Uploaded – lesson id: ${js.id}`);
-            resolve();
-          } else {
-            reject(new Error(js.error || `HTTP ${xhr.status}`));
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-
+      xhr.onload = () =>
+        xhr.status === 200 ? resolve() : reject(new Error("Upload failed"));
       xhr.onerror = () => reject(new Error("Network error"));
-      xhr.send(fd);
+      xhr.send(file);
     })
+      .then(() => setMsg("✓ File uploaded — processing…"))
       .catch((err) => setMsg(`✗ ${err.message}`))
       .finally(() => setBusy(false));
   }
 
-  /* -------------- UI --------------------------------------------------- */
+  /* ---------------- UI ------------------------------------------- */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>
@@ -82,7 +90,6 @@ export default function UploadLessonPage() {
           onChange={(e) => setDesc(e.target.value)}
         />
 
-        {/* progress bar */}
         {busy && (
           <div className="w-full bg-gray-200 h-3 rounded">
             <div
