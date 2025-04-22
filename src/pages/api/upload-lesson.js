@@ -2,7 +2,7 @@
 import multer from "multer";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
-import { db } from "../../lib/firebaseAdmin.js"; // server‑side admin already initialised
+import { db } from "../../../lib/firebaseAdmin.js"; // server‑side admin already initialised
 
 /* ------------------------------------------------------------------ */
 /* 0 · multipart/form‑data parser (memory storage)                    */
