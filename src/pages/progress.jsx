@@ -1,4 +1,3 @@
-// pages/progress.js
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -7,7 +6,6 @@ export default function Progress() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  /* fetch lessons + per‑lesson progress once on mount */
   useEffect(() => {
     (async () => {
       try {
@@ -23,7 +21,6 @@ export default function Progress() {
     })();
   }, []);
 
-  /* ---------- tiny progress bar component ---------- */
   const ProgressBar = ({ pct }) => (
     <div className="w-full h-2 bg-gray-300 rounded">
       <div className="h-2 bg-green-500 rounded" style={{ width: `${pct}%` }} />
@@ -39,28 +36,24 @@ export default function Progress() {
       {!loading && lessons.length === 0 && <p>No lessons assigned yet.</p>}
 
       <div className="space-y-6">
-        {lessons.map((l) => {
-          const pct = l.progressPct ?? 0; // default if not computed
-          return (
-            <div key={l.id} className="border rounded p-6">
-              <h2 className="text-xl font-semibold mb-1">{l.title}</h2>
-              <p className="text-sm text-gray-700 mb-4 line-clamp-2">
-                {l.description}
-              </p>
+        {lessons.map((l) => (
+          <div key={l.id} className="border rounded p-6">
+            <h2 className="text-xl font-semibold mb-1">{l.title}</h2>
+            <p className="text-sm text-gray-700 mb-4 line-clamp-2">
+              {l.description}
+            </p>
 
-              <p className="text-sm mb-1">Progress: {pct}%</p>
-              <ProgressBar pct={pct} />
+            <p className="text-sm mb-1">Progress: {l.progressPct ?? 0}%</p>
+            <ProgressBar pct={l.progressPct ?? 0} />
 
-              {/* optional deep link */}
-              <Link
-                href="#"
-                className="text-blue-600 underline text-sm inline-block mt-3"
-              >
-                Continue lesson →
-              </Link>
-            </div>
-          );
-        })}
+            <Link
+              href={`/lesson/${l.id}`}
+              className="text-blue-600 underline text-sm inline-block mt-3"
+            >
+              Continue lesson →
+            </Link>
+          </div>
+        ))}
       </div>
     </section>
   );

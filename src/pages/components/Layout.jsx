@@ -15,6 +15,7 @@ const NAV = {
     { href: "/instructor-dashboard", label: "Dashboard" },
     { href: "/upload-lesson", label: "Upload Lesson" },
     { href: "/track-progress", label: "Progress" },
+    { href: "/lessons", label: "Lessons" }, // new tab
   ],
   student: [
     { href: "/student-dashboard", label: "Dashboard" },

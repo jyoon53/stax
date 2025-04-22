@@ -1,11 +1,6 @@
-// pages/student-dashboard.js
 // -----------------------------------------------------------------------------
 // Student “Home” dashboard
-// • Shows every lesson assigned to the learner
-// • Displays progress% (server‑side field or client‑side fallback)
-// • Responsive card grid identical to /classes for design consistency
 // -----------------------------------------------------------------------------
-
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -14,7 +9,6 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  /* fetch lessons on mount */
   useEffect(() => {
     (async () => {
       try {
@@ -30,15 +24,15 @@ export default function StudentDashboard() {
     })();
   }, []);
 
-  /* fallback progress calc if API hasn’t added progressPct yet */
-  const calcPct = (lesson) => {
-    if (lesson.progressPct !== undefined) return lesson.progressPct;
-    if (!lesson.exercises || lesson.exercises.length === 0) return 0;
-    const done = lesson.exercises.filter((ex) => ex.completed).length;
-    return Math.round((done / lesson.exercises.length) * 100);
-  };
+  /* fallback progress calc */
+  const pct = (l) =>
+    l.progressPct ??
+    Math.round(
+      ((l.exercises?.filter((e) => e.completed).length || 0) /
+        (l.exercises?.length || 1)) *
+        100
+    );
 
-  /* tiny progress bar */
   const Bar = ({ pct }) => (
     <div className="w-full h-2 bg-gray-300 rounded">
       <div className="h-2 bg-blue-500 rounded" style={{ width: `${pct}%` }} />
@@ -56,24 +50,21 @@ export default function StudentDashboard() {
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {lessons.map((l) => {
-          const pct = calcPct(l);
-          return (
-            <Link
-              key={l.id}
-              href="#"
-              className="border rounded-lg p-6 hover:shadow-md transition"
-            >
-              <h2 className="text-xl font-semibold mb-1">{l.title}</h2>
-              <p className="text-sm text-gray-700 mb-4 line-clamp-3">
-                {l.description}
-              </p>
+        {lessons.map((l) => (
+          <Link
+            key={l.id}
+            href={`/lesson/${l.id}`}
+            className="border rounded-lg p-6 hover:shadow-md transition"
+          >
+            <h2 className="text-xl font-semibold mb-1">{l.title}</h2>
+            <p className="text-sm text-gray-700 mb-4 line-clamp-3">
+              {l.description}
+            </p>
 
-              <p className="text-sm mb-1">Progress: {pct}%</p>
-              <Bar pct={pct} />
-            </Link>
-          );
-        })}
+            <p className="text-sm mb-1">Progress: {pct(l)}%</p>
+            <Bar pct={pct(l)} />
+          </Link>
+        ))}
       </div>
     </section>
   );

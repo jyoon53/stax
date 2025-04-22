@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Slice a master recording into per‑room clips **locally**.
+Slice a master recording into per‑room clips **locally** and
+convert each clip path into a public URL served from Vercel.
 
 Usage
 -----
@@ -15,20 +16,21 @@ import firebase_admin
 from firebase_admin import firestore
 
 # ---------------------------------------------------------------------------
-# Ensure the folder that holds clipper.py **and** clipper_util.py is on PYTHONPATH
+#  Add the directory containing clipper.py *and* clipper_util.py to PYTHONPATH
 # ---------------------------------------------------------------------------
 this_dir = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(this_dir))           # <‑‑ key line
+sys.path.insert(0, str(this_dir))
 
-from clipper_util import slice_session      # now guaranteed to work
+from clipper_util import slice_session   # guaranteed import
 # ---------------------------------------------------------------------------
 
-# Initialise Admin SDK once
+# Initialise Firebase Admin once
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
 
 db = firestore.client()
 
+# ---------------------------------------------------------------------------
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("session", help="Firestore document ID (sessions/{id})")
@@ -36,7 +38,7 @@ def main() -> None:
     p.add_argument("--out",   help="Output directory (default: ~/Movies/Clips)")
     args = p.parse_args()
 
-    # ---------- grab session doc -------------------------------------------
+    # ---------- fetch session doc ------------------------------------------
     sess_ref = db.collection("sessions").document(args.session).get()
     if not sess_ref.exists:
         sys.exit("❌  Session not found")
@@ -53,8 +55,17 @@ def main() -> None:
     out_dir  = pathlib.Path(args.out or (pathlib.Path.home() / "Movies" / "Clips"))
     manifest = slice_session(args.session, str(video), t0, out_dir)
 
+    # ---------- rewrite clipUrl to Vercel public URLs ----------------------
+    VERCEL_ROOT = "https://stax-roblox.vercel.app/clips/"   # <- your domain
+    for item in manifest:
+        filename          = pathlib.Path(item["clipUrl"]).name   # e.g. 'roomB.mp4'
+        item["clipUrl"]   = VERCEL_ROOT + filename
+
+    # ---------- write back to Firestore -----------------------------------
     db.document(f"sessions/{args.session}").set({"clips": manifest}, merge=True)
     print(f"🎉  {len(manifest)} clips → {out_dir}")
+    print("✅  clipUrl values now point at", VERCEL_ROOT)
 
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     main()

@@ -45,7 +45,8 @@ export default function UploadLesson() {
         xhr.send(fd);
       });
 
-      router.push("/instructor-dashboard");
+      const newId = JSON.parse(xhr.responseText).id;
+      router.push(`/lesson/${newId}`);
     } catch (error) {
       console.error(error);
       setErr(error.message || "Upload failed");
