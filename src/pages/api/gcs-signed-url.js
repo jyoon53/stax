@@ -1,36 +1,37 @@
-import { getApps, initializeApp, cert } from "firebase-admin/app";
+// pages/api/gcs-signed-url.js
+// -----------------------------------------------------------------------------
+// Issue a signed PUT URL so the instructor can upload the master recording.
+// -----------------------------------------------------------------------------
+
+import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../../../lib/firebaseAdmin.js";
+import { db } from "../../../lib/firebaseAdmin";
 
-/* ── 1. Resolve bucket name (env‑var required) ───────────────────────── */
-const BUCKET_NAME = process.env.CLIP_BUCKET; // <- alias OK
-
+/* 1. Resolve bucket name --------------------------------------------------- */
+const BUCKET_NAME = process.env.CLIP_BUCKET?.trim();
 if (!BUCKET_NAME)
   throw new Error(
-    'CLIP_BUCKET env var is missing (e.g. "roblox-lms.firebasestorage.app")'
+    'Missing env var CLIP_BUCKET (e.g. "roblox-lms.firebasestorage.app")'
   );
 
-/* ── 2. Initialise Admin SDK once ────────────────────────────────────── */
+/* 2. Init Admin SDK (singleton) ------------------------------------------- */
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
-
 if (getApps().length === 0) {
   initializeApp({
     credential: cert(serviceAccount),
-    storageBucket: BUCKET_NAME, // ← alias used here
+    storageBucket: BUCKET_NAME,
   });
 }
-
-/* Always pass the exact same string */
 const bucket = getStorage().bucket(BUCKET_NAME);
 
-/* ── 3. API handler ─────────────────────────────────────────────────── */
+/* 3. API route ------------------------------------------------------------- */
 export default async function handler(req, res) {
-  /* CORS pre‑flight */
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   if (req.method === "OPTIONS") {
     res
-      .setHeader("Access-Control-Allow-Origin", "*")
-      .setHeader("Access-Control-Allow-Headers", "Content-Type")
+      .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
       .setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
     return res.status(204).end();
   }
@@ -40,35 +41,41 @@ export default async function handler(req, res) {
     return res.status(405).end("Method Not Allowed");
   }
 
-  const {
-    lessonId,
-    contentType,
-    title = "",
-    description = "",
-  } = req.body || {};
+  /* ── Extract + sanitise payload ─────────────────────────────────────── */
+  let { lessonId, contentType, title = "", description = "" } = req.body || {};
+
   if (!lessonId || !contentType)
     return res.status(400).end("Missing lessonId or contentType");
 
-  /* Signed PUT URL — valid 15 min */
-  const [url] = await bucket.file(`master/${lessonId}.mp4`).getSignedUrl({
+  // ── Sanitise lessonId (no spaces, no strange chars) ────────────────────
+  lessonId = String(lessonId)
+    .trim()
+    .replace(/[^\w-]/g, "_");
+  if (!lessonId) return res.status(400).end("Invalid lessonId");
+
+  const objectKey = `master/${lessonId}.mp4`;
+
+  /* ── Create signed PUT URL (15 min) ─────────────────────────────────── */
+  const [url] = await bucket.file(objectKey).getSignedUrl({
     version: "v4",
     action: "write",
     expires: Date.now() + 15 * 60 * 1000,
     contentType,
   });
 
-  /* Firestore stub so UI shows progress */
+  /* ── Seed Firestore so UI can show progress ─────────────────────────── */
   await db.doc(`lessons/${lessonId}`).set(
     {
       title,
       description,
       status: "uploading",
-      masterVideoPath: `gs://${BUCKET_NAME}/master/${lessonId}.mp4`,
+      masterVideoPath: `gs://${BUCKET_NAME}/${objectKey}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
 
-  res.setHeader("Access-Control-Allow-Origin", "*").json({ url });
+  /* ── Respond ────────────────────────────────────────────────────────── */
+  res.json({ url, objectKey });
 }

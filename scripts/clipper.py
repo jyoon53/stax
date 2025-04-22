@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
+
 """
+clipper.py
 Slice a master recording into per‑room clips **locally** and
 publish them to Firestore so the LMS shows the lesson automatically.
 

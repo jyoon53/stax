@@ -1,98 +1,135 @@
 """
-process_video
-─────────────
-Cloud Function (Python 3.11, trigger = Storage Finalize)
-Cuts gs://<CLIP_BUCKET>/master/<sessionId>.mp4 into per‑room clips,
-uploads them to clips/<sessionId>/, and creates lessons/<sessionId>.
+functions/main.py
+──────────────────────────────────────────────────────────────────────────────
+Cloud Function (Python 3.11, Storage *finalize* trigger)
+
+  • Listens to:  gs://<CLIP_BUCKET>/master/<sessionId>.mp4  (or .mov)
+  • Runs        clipper_util.slice_session()  → per‑room clips
+  • Writes      clips/<sessionId>/<clip>.mp4   (public‑read for demo)
+  • Updates     lessons/<sessionId>            (Firestore doc the LMS watches)
 """
 
-from __future__ import annotations
-import os, pathlib, tempfile
-from typing import Dict, List
+import os
+import pathlib
+import tempfile
+import logging
+from typing import List, Dict
 
-from clipper_util import slice_session  # ← local import (same folder)
+from firebase_functions import storage_fn
+import firebase_functions
+from google.cloud import storage, firestore
 
-# ── runtime clients are created lazily inside the handler ──────────────
-BUCKET_NAME = os.environ["CLIP_BUCKET"].strip()        # e.g. roblox-lms
+# ─────────────────────────── ffmpeg on PATH setup ───────────────────────────
+# Use imageio-ffmpeg for a bundled ffmpeg binary
+from imageio_ffmpeg import get_ffmpeg_exe
 
+_ffmpeg_exe = get_ffmpeg_exe()
+_ffmpeg_dir = os.path.dirname(_ffmpeg_exe)
+# Prepend ffmpeg binary directory so subprocess can call 'ffmpeg'
+os.environ["PATH"] = f"{_ffmpeg_dir}{os.pathsep}{os.environ['PATH']}"
 
-def _clients():
-    from google.cloud import storage, firestore
-    return storage.Client(), firestore.Client()
+from clipper_util import slice_session  # local slicing helper
 
+# ───────────────────────────── 1. bucket name ──────────────────────────────
+# Prefer env var CLIP_BUCKET, then functions config "clip.bucket"
+_bucket_env = os.getenv("CLIP_BUCKET", "").strip()
+_bucket_cfg = (
+    firebase_functions.runtime().config().get("clip", {}).get("bucket", "")
+    if hasattr(firebase_functions, "runtime") else ""
+)
+BUCKET_NAME: str = _bucket_env or _bucket_cfg
 
-# tiny helpers ----------------------------------------------------------
-def _download(bucket, key: str, dst: pathlib.Path) -> None:
-    bucket.blob(key).download_to_filename(dst)
+if not BUCKET_NAME:
+    logging.warning(
+        "⚠️  CLIP_BUCKET not set (env or functions:config). "
+        "Emulator will use wildcard bucket."
+    )
 
-
-def _upload(bucket, src: pathlib.Path, key: str) -> None:
-    bucket.blob(key).upload_from_filename(src)
-
-
-# entry‑point -----------------------------------------------------------
-def process_video(event: Dict, _ctx) -> None:
-    name = event.get("name", "")                       # "master/abc123.mp4"
-    if not name.startswith("master/") or not name.endswith(".mp4"):
-        return                                         # ignore other objects
-
+# ───────────────────────────── 2. Cloud Function ───────────────────────────
+# Use wildcard bucket when BUCKET_NAME is empty (for emulator introspection)
+@storage_fn.on_object_finalized(
+    bucket=BUCKET_NAME or "*",
+    event_type="google.cloud.storage.object.v1.finalized",
+)
+def process_video(
+    event: storage_fn.CloudEvent[storage_fn.StorageObjectData], _ctx=None
+) -> None:
+    """Auto‑clips new master videos uploaded under 'master/' prefix."""
     if not BUCKET_NAME:
-        raise RuntimeError("CLIP_BUCKET env var not set in Cloud Functions")
+        logging.error("❌  No CLIP_BUCKET configured; skipping processing.")
+        return
 
-    session_id = pathlib.Path(name).stem               # "abc123"
-    print(f"⚙︎  slicing {name} (session id {session_id})")
+    obj_name: str = event.data.name or ""
+    # Only process files under 'master/'
+    if not obj_name.startswith("master/"):
+        return
+    # Only handle .mp4 or .mov
+    if not obj_name.lower().endswith((".mp4", ".mov")):
+        logging.info("Ignoring non-video file %s", obj_name)
+        return
 
-    gcs, db = _clients()
+    # Derive sessionId from filename stem
+    session_id = pathlib.Path(obj_name).stem
+    logging.info("⚙︎  Slicing %s  (session id=%s)", obj_name, session_id)
+
+    # Initialize GCS and Firestore clients
+    gcs = storage.Client()
+    db = firestore.Client()
     bucket = gcs.bucket(BUCKET_NAME)
 
-    # 1 · obsT0 if present
+    # ── 1. Fetch OBS t0 offset if present ───────────────────────────────
     t0 = 0.0
-    sess_snap = db.document(f"sessions/{session_id}").get()
-    if sess_snap.exists and "obsT0" in sess_snap.to_dict():
-        t0 = sess_snap.to_dict()["obsT0"].timestamp()
-        print("⏱️  obsT0 =", t0)
+    sess_ref = db.document(f"sessions/{session_id}")
+    sess_doc = sess_ref.get()
+    if sess_doc.exists:
+        data = sess_doc.to_dict() or {}
+        obs_t0 = data.get("obsT0")
+        if hasattr(obs_t0, "timestamp"):
+            t0 = obs_t0.timestamp()
+            logging.info("⏱️  obsT0 = %s", t0)
 
-    # 2 · download + slice
+    # ── 2. Download master & slice ───────────────────────────────────────
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = pathlib.Path(tmpdir)
-        local_master = tmpdir / f"{session_id}.mp4"
-        _download(bucket, name, local_master)
+        local_master = pathlib.Path(tmpdir) / f"{session_id}.mp4"
+        bucket.blob(obj_name).download_to_filename(local_master)
 
-        manifest: List[dict] = slice_session(
-            session_id,
-            str(local_master),
-            t0=t0,
-            out_dir=tmpdir,
-        )
-
-        # 3 · upload clips & rewrite URLs
-        for item in manifest:
-            clip_path = pathlib.Path(item["clipUrl"])
-            gcs_key   = f"clips/{session_id}/{clip_path.name}"
-            _upload(bucket, clip_path, gcs_key)
-            item["clipUrl"] = (
-                f"https://stax-roblox.vercel.app/clips/{session_id}/{clip_path.name}"
+        try:
+            manifest: List[Dict] = slice_session(
+                session_id, str(local_master), t0=t0, out_dir=tmpdir
             )
+        except Exception as err:
+            logging.exception("slice_session failed: %s", err)
+            sess_ref.set({"status": "error", "processingError": str(err)}, merge=True)
+            return
 
-    # 4 · Firestore batch write
-    from google.cloud import firestore  # import inside runtime
+        # ── 3. Upload clips (public-read for demo) ────────────────────────
+        for item in manifest:
+            clip_path = pathlib.Path(item.get("clipUrl", ""))
+            gcs_key = f"clips/{session_id}/{clip_path.name}"
+            clip_blob = bucket.blob(gcs_key)
+            clip_blob.upload_from_filename(clip_path)
+            clip_blob.make_public()
+            item["clipUrl"] = clip_blob.public_url
+
+    # ── 4. Firestore batch write ────────────────────────────────────────
     batch = db.batch()
 
-    # (a) store manifest on session doc
+    # (a) Attach manifest to sessions/{id}
     batch.set(
-        db.document(f"sessions/{session_id}"),
+        sess_ref,
         {"clips": manifest, "processedAt": firestore.SERVER_TIMESTAMP},
         merge=True,
     )
 
-    # (b) create / update lesson doc consumed by the LMS
+    # (b) Update lessons/{id} for the LMS UI
+    lesson_ref = db.document(f"lessons/{session_id}")
     batch.set(
-        db.document(f"lessons/{session_id}"),
+        lesson_ref,
         {
-            "title":   session_id,
-            "status":  "ready",
+            "title": session_id,
+            "status": "ready",
             "chapters": [
-                {"roomId": m["roomID"], "clipUrl": m["clipUrl"], "order": i}
+                {"roomId": m.get("roomID"), "clipUrl": m.get("clipUrl"), "order": i}
                 for i, m in enumerate(manifest)
             ],
             "updatedAt": firestore.SERVER_TIMESTAMP,
@@ -101,4 +138,7 @@ def process_video(event: Dict, _ctx) -> None:
     )
 
     batch.commit()
-    print(f"✅  {len(manifest)} clips uploaded — lesson “{session_id}” ready")
+    logging.info(
+        "✅  %d clips uploaded — lesson '%s' ready",
+        len(manifest), session_id
+    )

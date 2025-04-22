@@ -21,6 +21,8 @@
   "functions": {
     "source": "functions",
     "runtime": "python311",
-    "ignore": ["node_modules", ".venv"]
+    "v2": true,
+    "memory": "512MiB",
+    "region": "us-central1"
   }
 }
