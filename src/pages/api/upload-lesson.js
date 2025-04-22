@@ -10,9 +10,9 @@
  * NOTE: runs **only on the Next.js server** – safe to import firebase‑admin.
  */
 import multer from "multer";
-import { getApps, initializeApp, cert } from "firebase-admin/app";
+import { getApps, initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
-import { db } from "@/lib/firebaseAdmin"; // same helper you already have
+import { db } from "@/lib/firebaseAdmin";
 
 /* ------------------------------------------------------------------ */
 /* 0.  parse multipart / form‑data with Multer (memory storage)       */

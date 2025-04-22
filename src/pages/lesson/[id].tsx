@@ -8,9 +8,9 @@ import {
 import { useDocumentData } from "react-firebase-hooks/firestore";
 import Head from "next/head";
 import Link from "next/link";
-import { db } from "../../../lib/firebaseClient";
+import { db } from "../../../lib/firebaseClient"; // alias @ → adjust if needed
 
-/* ------------- Types --------------- */
+/* ─── Firestore types ──────────────────────────────────────────────── */
 interface Chapter {
   roomId: string;
   clipUrl: string;
@@ -20,21 +20,23 @@ interface Lesson {
   description?: string;
   chapters: Chapter[];
 }
-/* ----------------------------------- */
 
-/* -------- Firestore converter ------- */
+/* ─── Firestore converter ─────────────────────────────────────────── */
 const cv: FirestoreDataConverter<Lesson> = {
   toFirestore: (l) => l as Record<string, unknown>,
   fromFirestore: (s) => s.data() as Lesson,
 };
 
+/* ─── Component ───────────────────────────────────────────────────── */
 export default function LessonPlayer() {
   const { query } = useRouter();
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   const ref: DocumentReference<Lesson> | undefined = useMemo(() => {
-    if (!db || !query.id) return undefined;
+    if (!query.id) return undefined; // no router param yet
     return doc(db, "lessons", String(query.id)).withConverter(cv);
-  }, [db, query.id]);
+  }, [query.id]); // db is stable, omit
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const [lesson, loading] = useDocumentData<Lesson>(ref);
 
@@ -43,7 +45,7 @@ export default function LessonPlayer() {
   return (
     <>
       <Head>
-        <title>{lesson.title} · Stax</title>
+        <title>{lesson.title} · Stax</title>
       </Head>
 
       <section className="max-w-4xl mx-auto pb-20">
@@ -51,10 +53,11 @@ export default function LessonPlayer() {
 
         <ol className="space-y-16">
           {lesson.chapters.map((c, i) => (
-            <li key={c.roomId}>
+            <li key={`${c.roomId}-${i}`}>
               <h2 className="text-2xl font-semibold mb-2">
-                {i + 1}. {c.roomId}
+                {i + 1}.&nbsp;{c.roomId}
               </h2>
+
               <video
                 src={c.clipUrl}
                 controls
@@ -64,10 +67,15 @@ export default function LessonPlayer() {
           ))}
         </ol>
 
-        <Link href="#" onClick={() => history.back()}>
-          <span className="inline-block mt-10 text-blue-600 hover:underline">
-            ← Back
-          </span>
+        <Link
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            history.back();
+          }}
+          className="inline-block mt-10 text-blue-600 hover:underline"
+        >
+          ← Back
         </Link>
       </section>
     </>
