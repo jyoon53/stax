@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     });
     const text = await sliceRes.text();
     if (!sliceRes.ok) {
+      console.error("Slicer error:", text);
       return res.status(sliceRes.status).send(text);
     }
     return res.status(200).json({ status: "ok", detail: text });

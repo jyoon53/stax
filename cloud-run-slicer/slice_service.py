@@ -1,4 +1,5 @@
 # cloud-run-slicer/slice_service.py
+
 import os
 import tempfile
 import pathlib
@@ -20,47 +21,70 @@ def slice_video():
         logging.info(f"🔔 slice_video called for session={session_id}, bucket={bucket_name}")
 
         if not session_id or not bucket_name:
-            raise ValueError("Missing sessionId or bucket in request")
+            raise ValueError("Missing sessionId or bucket")
 
-        # 1) Download master (list existing blobs for debugging)
+        # 1) Download master (list + download first match)
         client = storage.Client()
         bucket = client.bucket(bucket_name)
         tmpdir = tempfile.mkdtemp()
-        logging.debug(f"Created temporary dir {tmpdir}")
+        logging.debug(f"Created temp dir {tmpdir}")
 
-        # List all blobs under master/ prefix to see what's present
         blobs = list(bucket.list_blobs(prefix=f"master/{session_id}"))
         logging.debug(f"Existing master blobs: {[b.name for b in blobs]}")
 
         local_master = None
-        # Download the first matching blob
         for blob in blobs:
             ext = pathlib.Path(blob.name).suffix
             local_master = pathlib.Path(tmpdir) / f"{session_id}{ext}"
-            logging.info(f"⬇️ Downloading {blob.name} to {local_master}")
+            logging.info(f"⬇️ Downloading {blob.name} → {local_master}")
             blob.download_to_filename(local_master)
             logging.info("Download complete.")
             break
 
-        if local_master is None:
+        if not local_master:
             msg = f"No master video found for session '{session_id}' in bucket '{bucket_name}'"
             logging.error(msg)
             return jsonify({"status": "error", "message": msg}), 404
 
-        # 2) Fetch obsT0
+        # 2) Determine t0: prefer obsT0 but fall back to earliest event
         db = firestore.Client()
         sess_doc = db.document(f"sessions/{session_id}").get()
-        if not sess_doc.exists:
-            logging.warning(f"No sessions/{session_id} doc; defaulting obsT0=0")
-            t0 = 0.0
-        else:
-            data = sess_doc.to_dict() or {}
-            obs = data.get("obsT0")
-            if hasattr(obs, "timestamp"):
-                t0 = obs.timestamp()
+        obs_t0 = None
+        if sess_doc.exists:
+            raw = sess_doc.to_dict().get("obsT0")
+            if hasattr(raw, "timestamp"):
+                obs_t0 = raw.timestamp()
             else:
-                t0 = float(obs or 0.0)
-            logging.info(f"⏱ Using obsT0 = {t0}")
+                try:
+                    obs_t0 = float(raw)
+                except:
+                    obs_t0 = None
+        logging.debug(f"Raw obsT0 = {obs_t0}")
+
+        # Fetch all event timestamps
+        evts = list(
+            db.collection("sessions")
+              .document(session_id)
+              .collection("roomEvents")
+              .order_by("timestamp")
+              .stream()
+        )
+        ts_list = []
+        for snap in evts:
+            val = snap.to_dict().get("timestamp")
+            if val is not None:
+                ts_list.append(val.timestamp() if hasattr(val, "timestamp") else float(val))
+
+        if ts_list:
+            earliest = min(ts_list)
+            if obs_t0 is None or obs_t0 > earliest:
+                t0 = earliest
+            else:
+                t0 = obs_t0
+        else:
+            t0 = obs_t0 or 0.0
+
+        logging.info(f"⏱ Using t0 = {t0} (obsT0={obs_t0}, earliestEvent={ts_list[0] if ts_list else 'n/a'})")
 
         # 3) Slice
         logging.debug(f"Starting slice_session on {local_master}")
@@ -69,9 +93,9 @@ def slice_video():
         for i, item in enumerate(manifest):
             logging.debug(f"  Clip {i}: room={item['roomID']} offsets={item['startOffset']}-{item['endOffset']}")
 
-        # 4) Upload clips & update Firestore
+        # 4) Upload + Firestore update
         batch = db.batch()
-        sess_ref   = db.document(f"sessions/{session_id}")
+        sess_ref = db.document(f"sessions/{session_id}")
         lesson_ref = db.document(f"lessons/{session_id}")
 
         for item in manifest:
@@ -81,9 +105,8 @@ def slice_video():
             logging.info(f"⬆️ Uploading clip to {gcs_key}")
             clip_blob.upload_from_filename(str(clip_path))
             clip_blob.make_public()
-            public_url = clip_blob.public_url
-            item["clipUrl"] = public_url
-            logging.info(f"  Public URL: {public_url}")
+            item["clipUrl"] = clip_blob.public_url
+            logging.info(f"  Public URL: {item['clipUrl']}")
 
         batch.set(sess_ref, {"clips": manifest}, merge=True)
         chapters = [
@@ -94,7 +117,6 @@ def slice_video():
         batch.commit()
         logging.info("✅ All clips uploaded and Firestore updated")
 
-        # Cleanup
         shutil.rmtree(tmpdir)
         logging.debug(f"Cleaned up temp dir {tmpdir}")
 
