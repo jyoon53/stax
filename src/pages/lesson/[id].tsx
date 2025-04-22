@@ -1,13 +1,19 @@
 // src/pages/lesson/[id].tsx
-import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMemo } from "react";
-import { doc, FirestoreDataConverter } from "firebase/firestore";
+import {
+  doc,
+  FirestoreDataConverter,
+  DocumentReference,
+  QueryDocumentSnapshot,
+  SnapshotOptions,
+} from "firebase/firestore";
 import { useDocumentData } from "react-firebase-hooks/firestore";
-import { db } from "../../../lib/firebaseClient";
+import Head from "next/head";
+import Link from "next/link";
+import { db } from "../../../lib/firebaseClient"; // adjust alias if different
 
-/* ── Firestore shapes ───────────────────────────────────────────────── */
+/* ── Firestore types ─────────────────────────────────────────────── */
 interface Chapter {
   roomId: string;
   clipUrl: string;
@@ -18,22 +24,26 @@ interface Lesson {
   chapters: Chapter[];
 }
 
+/* ── Firestore converter (no ‘any’) ──────────────────────────────── */
 const cv: FirestoreDataConverter<Lesson> = {
-  toFirestore: (v) => v as any,
-  fromFirestore: (s) => s.data() as Lesson,
+  toFirestore: (l: Lesson) => l,
+  fromFirestore: (
+    snap: QueryDocumentSnapshot,
+    _opts: SnapshotOptions
+  ): Lesson => snap.data() as Lesson,
 };
 
 export default function LessonPlayer() {
   const { query } = useRouter();
 
-  /* db is **never undefined** – only guard for query.id */
-  const ref = useMemo(() => {
-    return query.id
-      ? doc(db, "lessons", String(query.id)).withConverter(cv)
-      : undefined;
+  /* Create ref only when router is ready */
+  const ref = useMemo<DocumentReference<Lesson> | null>(() => {
+    if (!query.id) return null;
+    return doc(db, "lessons", String(query.id)).withConverter(cv);
   }, [query.id]);
 
-  const [lesson, loading] = useDocumentData(ref);
+  /* Hook short‑circuits if ref is null */
+  const [lesson, loading] = useDocumentData<Lesson>(ref ?? undefined);
 
   if (loading || !lesson) return <p className="p-8">Loading…</p>;
 
@@ -50,8 +60,9 @@ export default function LessonPlayer() {
           {lesson.chapters.map((c, i) => (
             <li key={`${c.roomId}-${i}`}>
               <h2 className="text-2xl font-semibold mb-2">
-                {i + 1}. {c.roomId}
+                {i + 1}.&nbsp;{c.roomId}
               </h2>
+
               <video
                 src={c.clipUrl}
                 controls
