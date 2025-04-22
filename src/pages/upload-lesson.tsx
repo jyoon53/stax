@@ -17,12 +17,25 @@ export default function UploadLessonPage() {
     setPct(0);
     setMsg("");
 
-    /* ——— 1 · derive session/lesson ID from cookie ———————————— */
-    const cookieId =
-      document.cookie.match(/(?:^|;\s*)sessionId=([^;]+)/)?.[1] ?? null;
-    const lessonId = cookieId || Date.now().toString(36);
+    /* ── 1 · derive the lesson / session ID ───────────────────────── */
+    let lessonId: string | null =
+      /* primary source — saved at “Start Recording” */
+      localStorage.getItem("currentSessionId") ||
+      /* secondary — cookie set by /api/start-recording */
+      document.cookie.match(/(?:^|;\s*)sessionId=([^;]+)/)?.[1] ||
+      /* last‑resort – derive from filename (e.g. 39cd3bfe.mov) */
+      file.name.replace(/\.[^.]+$/, "") ||
+      null;
 
-    /* ——— 2 · get signed PUT URL ———————————————— */
+    if (!lessonId) {
+      setBusy(false);
+      setMsg(
+        "✗ No active recording session found – press “Start Recording” first"
+      );
+      return;
+    }
+
+    /* ── 2 · ask backend for signed PUT URL ───────────────────────── */
     const metaRes = await fetch("/api/gcs-signed-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -41,13 +54,15 @@ export default function UploadLessonPage() {
     }
     const { url } = await metaRes.json();
 
-    /* ——— 3 · stream file direct to GCS ——————————————— */
+    /* ── 3 · stream file direct to Cloud Storage ──────────────────── */
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
       xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+
       xhr.upload.onprogress = (ev) =>
         ev.lengthComputable && setPct(Math.round((ev.loaded / ev.total) * 100));
+
       xhr.onload = () =>
         xhr.status === 200 ? resolve() : reject(new Error("Upload failed"));
       xhr.onerror = () => reject(new Error("Network error"));
@@ -58,6 +73,7 @@ export default function UploadLessonPage() {
       .finally(() => setBusy(false));
   }
 
+  /* ── UI ─────────────────────────────────────────────────────────── */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>

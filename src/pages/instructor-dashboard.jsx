@@ -4,9 +4,11 @@ import Link from "next/link";
 
 /* localStorage helpers ----------------------------------------------------- */
 const saveSession = (id) =>
-  typeof window !== "undefined" && localStorage.setItem("sessionId", id);
+  typeof window !== "undefined" && localStorage.setItem("currentSessionId", id);
 const getSession = () =>
-  typeof window !== "undefined" ? localStorage.getItem("sessionId") : null;
+  typeof window !== "undefined"
+    ? localStorage.getItem("currentSessionId")
+    : null;
 
 /* -------------------------------------------------------------------------- */
 export default function InstructorDashboard() {
