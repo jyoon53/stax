@@ -1,21 +1,18 @@
-/*  src/pages/lesson/[id].tsx  */
+// src/pages/lesson/[id].tsx
 import { useRouter } from "next/router";
 import { useMemo } from "react";
-import Head from "next/head";
-import Link from "next/link";
-
 import {
   doc,
   FirestoreDataConverter,
   DocumentReference,
   QueryDocumentSnapshot,
-  SnapshotOptions,
 } from "firebase/firestore";
 import { useDocumentData } from "react-firebase-hooks/firestore";
-
+import Head from "next/head";
+import Link from "next/link";
 import { db } from "../../../lib/firebaseClient";
 
-/* ─────────────────── Firestore domain types ──────────────────── */
+/* ────── Firestore types ─────────────────────────────────────────────── */
 interface Chapter {
   roomId: string;
   clipUrl: string;
@@ -27,24 +24,23 @@ interface Lesson {
   chapters: Chapter[];
 }
 
-/* ───────────────── Firestore converter (no “any”) ─────────────── */
-const lessonConverter: FirestoreDataConverter<Lesson> = {
-  toFirestore: (lesson: Lesson) => lesson,
-  fromFirestore: (snap: QueryDocumentSnapshot, opts: SnapshotOptions): Lesson =>
-    snap.data(opts) as Lesson,
+/* ────── Firestore converter (no unused params) ──────────────────────── */
+const lessonCv: FirestoreDataConverter<Lesson> = {
+  toFirestore: (lesson) => lesson,
+  fromFirestore: (snap: QueryDocumentSnapshot): Lesson => snap.data() as Lesson,
 };
 
-/* ─────────────────────── React page ───────────────────────────── */
+/* ────── Page component ──────────────────────────────────────────────── */
 export default function LessonPlayer() {
-  const { query } = useRouter();
+  const router = useRouter();
 
-  /* build the doc ref only once router has the id */
-  const lessonRef: DocumentReference<Lesson> | null = useMemo(() => {
-    if (!query.id) return null;
-    return doc(db, "lessons", String(query.id)).withConverter(lessonConverter);
-  }, [query.id]);
+  /* create the doc‑ref only once router.params are ready */
+  const lessonRef = useMemo<DocumentReference<Lesson> | null>(() => {
+    if (!router.isReady || !router.query.id) return null;
+    return doc(db, "lessons", String(router.query.id)).withConverter(lessonCv);
+  }, [router.isReady, router.query.id]);
 
-  /* react‑firebase‑hooks handles `undefined` refs gracefully */
+  /* react‑firebase‑hooks: skip if ref is null */
   const [lesson, loading] = useDocumentData<Lesson>(lessonRef ?? undefined);
 
   if (loading || !lesson) {
@@ -64,9 +60,8 @@ export default function LessonPlayer() {
           {lesson.chapters.map((c, i) => (
             <li key={`${c.roomId}-${i}`}>
               <h2 className="text-2xl font-semibold mb-2">
-                {i + 1}.&nbsp;{c.roomId}
+                {i + 1}. {c.roomId}
               </h2>
-
               <video
                 src={c.clipUrl}
                 controls
