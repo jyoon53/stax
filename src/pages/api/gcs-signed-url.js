@@ -1,38 +1,43 @@
-// src/pages/api/gcs-signed-url.js
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../../../lib/firebaseAdmin.js";
 
-/* ────── 1.  Resolve a valid bucket name (or throw) ─────────────────── */
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+/* ───── 1. Resolve bucket name or exit fast ─────────────────────────── */
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
 
-// default bucket that Firebase creates for the project
-const DEFAULT_BUCKET = `${serviceAccount.project_id}.appspot.com`;
+const DEFAULT_BUCKET = serviceAccount.project_id
+  ? `${serviceAccount.project_id}.appspot.com`
+  : null;
 
-// prefer env‑var, fall back to default
 const BUCKET_NAME = process.env.CLIP_BUCKET || DEFAULT_BUCKET;
 
-// Google’s bucket‑naming regex (lowercase, 3‑63 chars, no spaces)
+if (!BUCKET_NAME) {
+  throw new Error(
+    "❌ No bucket name resolved. Set CLIP_BUCKET in your env or " +
+      'add "project_id" to FIREBASE_SERVICE_ACCOUNT.'
+  );
+}
 if (!/^[a-z0-9.\-_]{3,63}$/.test(BUCKET_NAME)) {
   throw new Error(
-    `Invalid GCS bucket name "${BUCKET_NAME}". ` +
-      `Set CLIP_BUCKET to something like "roblox-lms.appspot.com".`
+    `❌ CLIP_BUCKET "${BUCKET_NAME}" is not a valid GCS bucket name`
   );
 }
 
-/* ────── 2.  Initialise Firebase Admin once ─────────────────────────── */
+/* ───── 2. Initialise Admin SDK (only once) ─────────────────────────── */
 if (getApps().length === 0) {
   initializeApp({
     credential: cert(serviceAccount),
-    storageBucket: BUCKET_NAME,
+    storageBucket: BUCKET_NAME, // <── critical line
   });
 }
-const bucket = getStorage().bucket();
 
-/* ────── 3.  API route ──────────────────────────────────────────────── */
+/*  Always pass the name to be extra‑safe.  */
+const bucket = getStorage().bucket(BUCKET_NAME);
+
+/* ───── 3. API handler ──────────────────────────────────────────────── */
 export default async function handler(req, res) {
-  /* CORS pre‑flight --------------------------------------------------- */
+  /* pre‑flight */
   if (req.method === "OPTIONS") {
     res
       .setHeader("Access-Control-Allow-Origin", "*")
@@ -53,12 +58,10 @@ export default async function handler(req, res) {
     description = "",
   } = req.body || {};
   if (!lessonId || !contentType) {
-    return res
-      .status(400)
-      .end("Missing fields: lessonId and contentType are required");
+    return res.status(400).end("Missing fields: lessonId and contentType");
   }
 
-  /* Signed PUT URL (15 min ttl) -------------------------------------- */
+  /* signed PUT url – valid 15 min */
   const [url] = await bucket.file(`master/${lessonId}.mp4`).getSignedUrl({
     version: "v4",
     action: "write",
@@ -66,7 +69,7 @@ export default async function handler(req, res) {
     contentType,
   });
 
-  /* Firestore stub so UI can show progress --------------------------- */
+  /* Firestore placeholder */
   await db.doc(`lessons/${lessonId}`).set(
     {
       title,
@@ -78,6 +81,6 @@ export default async function handler(req, res) {
     { merge: true }
   );
 
-  res.setHeader("Access-Control-Allow-Origin", "*"); // allow XHR from your app
+  res.setHeader("Access-Control-Allow-Origin", "*");
   return res.json({ url });
 }
