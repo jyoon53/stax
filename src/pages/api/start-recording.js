@@ -8,13 +8,8 @@ import { sendRobloxMessage } from "../../../lib/robloxOpenCloud.js";
 /**
  * POST /api/start-recording
  * body: { action: "start" | "stop", lessonId?: string }
- *
- * Sets/reads a cookie `sessionId`, forwards start/stop
- * commands to OBS, records timestamps in Firestore, and
- * returns { success, sessionId, action, recording }.
  */
 export default async function handler(req, res) {
-  /* ─────────── method guard ─────────── */
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -50,7 +45,8 @@ export default async function handler(req, res) {
       }
 
       try {
-        await start();
+        /* ✨ pass the ID so OBS names the file sessionId.mp4 */
+        await start(sessionId);
       } catch {
         console.warn("▶︎ OBS not reachable – continuing without recording");
       }
@@ -59,12 +55,11 @@ export default async function handler(req, res) {
     /* ─────────── STOP ──────────── */
     if (action === "stop") {
       await stop().catch(() => {});
-
       let file;
       try {
         ({ file } = await obsStatus());
       } catch {
-        /* leave undefined */
+        /* ignore */
       }
 
       const update = { stoppedAt: FieldValue.serverTimestamp() };
@@ -76,7 +71,7 @@ export default async function handler(req, res) {
         .set(update, { merge: true });
     }
 
-    /* final status (never throws) */
+    /* final status */
     let recording = false;
     try {
       ({ recording } = await obsStatus());
