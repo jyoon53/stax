@@ -87,21 +87,23 @@ export default async function handler(req, res) {
 
   /* ── Trigger slicing via Cloud Run (await to ensure request fires) ───── */
   if (SLICER_URL) {
+    console.log("Calling slicer service at:", SLICER_URL);
     try {
       const sliceRes = await fetch(`${SLICER_URL}/slice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: lessonId, bucket: BUCKET_NAME }),
       });
+      console.log("Slice service response status:", sliceRes.status);
       if (!sliceRes.ok) {
-        console.error(
-          "Slice service responded with error:",
-          await sliceRes.text()
-        );
+        const errText = await sliceRes.text();
+        console.error("Slice service responded with error:", errText);
       }
     } catch (err) {
       console.error("Failed to call slicer service:", err);
     }
+  } else {
+    console.warn("SLICER_URL not set, skipping slicing trigger.");
   }
 
   /* ── Respond to client ────────────────────────────────────────────────── */
