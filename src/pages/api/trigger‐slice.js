@@ -1,16 +1,16 @@
-import { db } from "../../lib/firebaseAdmin"; // if you need Firestore auth
+// pages/api/trigger-slice.js
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).end();
+    return res.status(405).end("Method Not Allowed");
   }
-  const { lessonId } = req.body;
-  if (!lessonId) return res.status(400).json({ error: "Missing lessonId" });
 
-  // Optionally re-seed obsT0 if you like:
-  // await db.doc(`sessions/${lessonId}`).set({ obsT0: FieldValue.serverTimestamp() }, { merge: true });
+  const { lessonId } = req.body || {};
+  if (!lessonId) {
+    return res.status(400).json({ error: "Missing lessonId" });
+  }
 
-  // Call slicer
   try {
     const sliceRes = await fetch(`${process.env.SLICER_URL}/slice`, {
       method: "POST",
@@ -20,10 +20,13 @@ export default async function handler(req, res) {
         bucket: process.env.CLIP_BUCKET,
       }),
     });
-    const payload = await sliceRes.text();
-    return res.status(sliceRes.status).send(payload);
-  } catch (e) {
-    console.error("Trigger-slice error:", e);
-    return res.status(500).json({ error: e.message });
+    const text = await sliceRes.text();
+    if (!sliceRes.ok) {
+      return res.status(sliceRes.status).send(text);
+    }
+    return res.status(200).json({ status: "ok", detail: text });
+  } catch (err) {
+    console.error("Trigger-slice error:", err);
+    return res.status(500).json({ error: err.message });
   }
 }
