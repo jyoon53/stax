@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, getDocs } from "firebase/firestore";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  QueryDocumentSnapshot,
+  DocumentData,
+} from "firebase/firestore";
 
-/* ---------- Firebase init ---------- */
-const firebaseConfig = {
-  /* <<< your config >>> */
-};
-if (getApps().length === 0) initializeApp(firebaseConfig);
-const db = getFirestore();
+/* ---------- Firebase init (client‑only) ---------- */
+let db: ReturnType<typeof getFirestore>;
+if (typeof window !== "undefined") {
+  const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  };
+  if (getApps().length === 0) initializeApp(firebaseConfig);
+  db = getFirestore();
+}
 
 /* ------------ Types --------------- */
 interface LessonCard {
@@ -20,15 +31,20 @@ interface LessonCard {
 
 export default function Lessons() {
   const [rows, setRows] = useState<LessonCard[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!db) return; // running on the server; skip
     (async () => {
       const snap = await getDocs(collection(db, "lessons"));
-      const list: LessonCard[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<LessonCard, "id">),
-      }));
+      const list: LessonCard[] = snap.docs.map(
+        (d: QueryDocumentSnapshot<DocumentData>) => ({
+          id: d.id,
+          ...(d.data() as Omit<LessonCard, "id">),
+        })
+      );
       setRows(list);
+      setLoading(false);
     })();
   }, []);
 
@@ -36,6 +52,7 @@ export default function Lessons() {
     <section className="p-8 text-black">
       <h1 className="text-3xl font-bold mb-8">All Lessons</h1>
 
+      {loading && <p>Loading…</p>}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((l) => (
           <Link
