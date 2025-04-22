@@ -47,10 +47,7 @@ if not BUCKET_NAME:
 
 # ───────────────────────────── 2. Cloud Function ───────────────────────────
 # Use wildcard bucket when BUCKET_NAME is empty (for emulator introspection)
-@storage_fn.on_object_finalized(
-    bucket=BUCKET_NAME or "*",
-    event_type="google.cloud.storage.object.v1.finalized",
-)
+@storage_fn.on_object_finalized()
 def process_video(
     event: storage_fn.CloudEvent[storage_fn.StorageObjectData], _ctx=None
 ) -> None:
