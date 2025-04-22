@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import { useMemo } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import {
   getFirestore,
@@ -10,7 +11,7 @@ import { useDocumentData } from "react-firebase-hooks/firestore";
 import Head from "next/head";
 import Link from "next/link";
 
-/* ---------- Firebase init (client‑only) ---------- */
+/* ---------- Firebase init (runs only in browser) ---------- */
 let db: ReturnType<typeof getFirestore> | undefined;
 if (typeof window !== "undefined") {
   const firebaseConfig = {
@@ -22,7 +23,7 @@ if (typeof window !== "undefined") {
   db = getFirestore();
 }
 
-/* ------------- types --------------- */
+/* ----------------- Types ----------------- */
 interface Chapter {
   roomId: string;
   clipUrl: string;
@@ -32,23 +33,25 @@ interface Lesson {
   description?: string;
   chapters: Chapter[];
 }
-/* ----------------------------------- */
+/* ----------------------------------------- */
 
-const lessonCv: FirestoreDataConverter<Lesson> = {
+/* -------- Firestore no‑op converter ------- */
+const cv: FirestoreDataConverter<Lesson> = {
   toFirestore: (l) => l as unknown as Record<string, unknown>,
-  fromFirestore: (snap) => snap.data() as Lesson,
+  fromFirestore: (s) => s.data() as Lesson,
 };
+/* ----------------------------------------- */
 
 export default function LessonPlayer() {
   const { query } = useRouter();
 
-  // Skip Firestore fetch during SSR
-  if (!db) return <p className="p-8">Loading…</p>;
+  /* Memoise the ref so it's stable between renders */
+  const ref: DocumentReference<Lesson> | undefined = useMemo(() => {
+    if (!db || !query.id) return undefined;
+    return doc(db, "lessons", String(query.id)).withConverter(cv);
+  }, [db, query.id]);
 
-  const ref: DocumentReference<Lesson> | undefined = query.id
-    ? doc(db, "lessons", String(query.id)).withConverter(lessonCv)
-    : undefined;
-
+  /* Hook is now unconditional — ESLint happy */
   const [lesson, loading] = useDocumentData<Lesson>(ref);
 
   if (loading || !lesson) return <p className="p-8">Loading…</p>;
