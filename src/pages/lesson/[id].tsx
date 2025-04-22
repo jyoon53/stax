@@ -27,10 +27,12 @@ interface Lesson {
 /* ── Firestore converter (no ‘any’) ──────────────────────────────── */
 const cv: FirestoreDataConverter<Lesson> = {
   toFirestore: (l: Lesson) => l,
+
+  // ⚠️  use `opts` instead of `_opts` and pass it to .data()
   fromFirestore: (
     snapshot: QueryDocumentSnapshot,
-    options: SnapshotOptions // <- keep the param
-  ): Lesson => snapshot.data(options) as Lesson, // <- use it here
+    opts: SnapshotOptions
+  ): Lesson => snapshot.data(opts) as Lesson,
 };
 
 export default function LessonPlayer() {
