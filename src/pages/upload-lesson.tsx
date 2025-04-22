@@ -18,7 +18,7 @@ export default function UploadLessonPage() {
     setMsg("");
 
     /* ── 1 · derive the lesson / session ID ───────────────────────── */
-    let lessonId: string | null =
+    const lessonId: string | null =
       /* primary source — saved at “Start Recording” */
       localStorage.getItem("currentSessionId") ||
       /* secondary — cookie set by /api/start-recording */
