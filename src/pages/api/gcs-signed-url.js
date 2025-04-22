@@ -1,6 +1,8 @@
+//gcs-signed-url.js
+
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
-import { db } from "@/lib/firebaseAdmin";
+import { db } from "../../../lib/firebaseAdmin";
 
 if (getApps().length === 0)
   initializeApp({
