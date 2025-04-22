@@ -1,24 +1,43 @@
+// src/pages/api/gcs-signed-url.js
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../../../lib/firebaseAdmin.js";
 
-/* ─────────── Firebase / GCS bootstrap ─────────── */
+/* ────── 1.  Resolve a valid bucket name (or throw) ─────────────────── */
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+// default bucket that Firebase creates for the project
+const DEFAULT_BUCKET = `${serviceAccount.project_id}.appspot.com`;
+
+// prefer env‑var, fall back to default
+const BUCKET_NAME = process.env.CLIP_BUCKET || DEFAULT_BUCKET;
+
+// Google’s bucket‑naming regex (lowercase, 3‑63 chars, no spaces)
+if (!/^[a-z0-9.\-_]{3,63}$/.test(BUCKET_NAME)) {
+  throw new Error(
+    `Invalid GCS bucket name "${BUCKET_NAME}". ` +
+      `Set CLIP_BUCKET to something like "roblox-lms.appspot.com".`
+  );
+}
+
+/* ────── 2.  Initialise Firebase Admin once ─────────────────────────── */
 if (getApps().length === 0) {
   initializeApp({
-    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
-    storageBucket: process.env.CLIP_BUCKET, // e.g. roblox‑lms.appspot.com
+    credential: cert(serviceAccount),
+    storageBucket: BUCKET_NAME,
   });
 }
 const bucket = getStorage().bucket();
 
-/* ─────────── API route ─────────── */
+/* ────── 3.  API route ──────────────────────────────────────────────── */
 export default async function handler(req, res) {
-  /* CORS pre‑flight for the browser PUT → signed URL */
+  /* CORS pre‑flight --------------------------------------------------- */
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res
+      .setHeader("Access-Control-Allow-Origin", "*")
+      .setHeader("Access-Control-Allow-Methods", "POST,OPTIONS")
+      .setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(204).end();
   }
 
@@ -39,7 +58,7 @@ export default async function handler(req, res) {
       .end("Missing fields: lessonId and contentType are required");
   }
 
-  /* Signed PUT URL valid for 15 min ----------------------------------- */
+  /* Signed PUT URL (15 min ttl) -------------------------------------- */
   const [url] = await bucket.file(`master/${lessonId}.mp4`).getSignedUrl({
     version: "v4",
     action: "write",
@@ -47,13 +66,13 @@ export default async function handler(req, res) {
     contentType,
   });
 
-  /* Stub Firestore doc so UI can show "uploading" ---------------------- */
+  /* Firestore stub so UI can show progress --------------------------- */
   await db.doc(`lessons/${lessonId}`).set(
     {
       title,
       description,
       status: "uploading",
-      masterVideoPath: `gs://${process.env.CLIP_BUCKET}/master/${lessonId}.mp4`,
+      masterVideoPath: `gs://${BUCKET_NAME}/master/${lessonId}.mp4`,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
