@@ -5,12 +5,16 @@ import { db } from "../../../lib/firebaseAdmin.js";
 import { start, stop, status as obsStatus } from "../../../lib/obs.js";
 import { sendRobloxMessage } from "../../../lib/robloxOpenCloud.js";
 
-const { sessionId } = await fetch("/api/start-recording", {
-  method: "POST",
-}).then((r) => r.json());
-localStorage.setItem("currentSessionId", sessionId);
-
+/**
+ * POST /api/start-recording
+ * body: { action: "start" | "stop", lessonId?: string }
+ *
+ * Sets/reads a cookie `sessionId`, forwards start/stop
+ * commands to OBS, records timestamps in Firestore, and
+ * returns { success, sessionId, action, recording }.
+ */
 export default async function handler(req, res) {
+  /* ─────────── method guard ─────────── */
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -24,7 +28,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    /* cookie‑based id */
+    /* cookie‑based session id */
     let sessionId = req.cookies.sessionId;
     if (action === "start" || !sessionId) sessionId = uuid().slice(0, 8);
 
@@ -62,6 +66,7 @@ export default async function handler(req, res) {
       } catch {
         /* leave undefined */
       }
+
       const update = { stoppedAt: FieldValue.serverTimestamp() };
       if (file !== undefined) update.masterVideoPath = file;
 
