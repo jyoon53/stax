@@ -1,23 +1,49 @@
-// pages/lesson/[id].tsx
 import { useRouter } from "next/router";
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, doc } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  FirestoreDataConverter,
+  DocumentReference,
+} from "firebase/firestore";
 import { useDocumentData } from "react-firebase-hooks/firestore";
 import Head from "next/head";
 import Link from "next/link";
 
+/* ---------- config & init ---------- */
 const firebaseConfig = {
   /* <<< your config >>> */
 };
-
 if (getApps().length === 0) initializeApp(firebaseConfig);
 const db = getFirestore();
 
+/* ------------- types --------------- */
+interface Chapter {
+  roomId: string;
+  clipUrl: string;
+}
+interface Lesson {
+  title: string;
+  description?: string;
+  chapters: Chapter[];
+}
+/* ----------------------------------- */
+
+/* ---- Firestore converter (no‑op) --- */
+const lessonCv: FirestoreDataConverter<Lesson> = {
+  toFirestore: (l) => l as unknown as Record<string, unknown>,
+  fromFirestore: (snap) => snap.data() as Lesson,
+};
+/* ----------------------------------- */
+
 export default function LessonPlayer() {
   const { query } = useRouter();
-  const [lesson, loading] = useDocumentData(
-    query.id ? doc(db, "lessons", query.id as string) : undefined
-  );
+
+  const ref: DocumentReference<Lesson> | undefined = query.id
+    ? doc(db, "lessons", String(query.id)).withConverter(lessonCv)
+    : undefined;
+
+  const [lesson, loading] = useDocumentData<Lesson>(ref);
 
   if (loading || !lesson) return <p className="p-8">Loading…</p>;
 
@@ -31,7 +57,7 @@ export default function LessonPlayer() {
         <h1 className="text-4xl font-bold mb-8">{lesson.title}</h1>
 
         <ol className="space-y-16">
-          {lesson.chapters?.map((c: any, i: number) => (
+          {lesson.chapters.map((c, i) => (
             <li key={c.roomId}>
               <h2 className="text-2xl font-semibold mb-2">
                 {i + 1}. {c.roomId}
