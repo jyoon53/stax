@@ -43,8 +43,15 @@ export default function LessonPlayer() {
   /* react‑firebase‑hooks: skip if ref is null */
   const [lesson, loading] = useDocumentData<Lesson>(lessonRef ?? undefined);
 
-  if (loading || !lesson) {
-    return <p className="p-8">Loading…</p>;
+  if (loading || !lesson) return <p className="p-8">Loading…</p>;
+
+  /* still processing – no clips yet */
+  if (!Array.isArray(lesson.chapters) || lesson.chapters.length === 0) {
+    return (
+      <p className="p-8">
+        This lesson is still processing clips — refresh in a minute…
+      </p>
+    );
   }
 
   return (

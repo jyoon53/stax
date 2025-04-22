@@ -1,4 +1,3 @@
-// pages/upload-lesson.tsx
 import { useState } from "react";
 
 export default function UploadLessonPage() {
@@ -18,10 +17,12 @@ export default function UploadLessonPage() {
     setPct(0);
     setMsg("");
 
-    /* ① ask backend for a signed PUT URL -------------------------- */
-    const lessonId =
-      localStorage.getItem("currentSessionId") || Date.now().toString(36);
+    /* ——— 1 · derive session/lesson ID from cookie ———————————— */
+    const cookieId =
+      document.cookie.match(/(?:^|;\s*)sessionId=([^;]+)/)?.[1] ?? null;
+    const lessonId = cookieId || Date.now().toString(36);
 
+    /* ——— 2 · get signed PUT URL ———————————————— */
     const metaRes = await fetch("/api/gcs-signed-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -35,24 +36,18 @@ export default function UploadLessonPage() {
 
     if (!metaRes.ok) {
       setBusy(false);
-      setMsg("✗ Failed to get upload URL");
+      setMsg("✗ Failed to obtain upload URL");
       return;
     }
-
     const { url } = await metaRes.json();
 
-    /* ② stream file direct to GCS --------------------------------- */
+    /* ——— 3 · stream file direct to GCS ——————————————— */
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
       xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
-
-      xhr.upload.onprogress = (ev) => {
-        if (ev.lengthComputable) {
-          setPct(Math.round((ev.loaded / ev.total) * 100));
-        }
-      };
-
+      xhr.upload.onprogress = (ev) =>
+        ev.lengthComputable && setPct(Math.round((ev.loaded / ev.total) * 100));
       xhr.onload = () =>
         xhr.status === 200 ? resolve() : reject(new Error("Upload failed"));
       xhr.onerror = () => reject(new Error("Network error"));
@@ -63,7 +58,6 @@ export default function UploadLessonPage() {
       .finally(() => setBusy(false));
   }
 
-  /* ---------------- UI ------------------------------------------- */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>
