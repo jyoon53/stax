@@ -1,35 +1,17 @@
-/**
- * POST /api/upload‑lesson
- * Multipart form fields
- *   ─ file field called  «video»       (the MP4)
- *   ─ text field called «title»        (optional)
- *   ─ text field called «description»  (optional)
- *
- * Response: { id: <lessonId> }
- *
- * NOTE: runs **only on the Next.js server** – safe to import firebase‑admin.
- */
+// src/pages/api/upload‑lesson.js
 import multer from "multer";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
-import { db } from "@/lib/firebaseAdmin";
+import { db } from "../../../lib/firebaseAdmin";
 
-/* ------------------------------------------------------------------ */
-/* 0.  parse multipart / form‑data with Multer (memory storage)       */
-const upload = multer({ storage: multer.memoryStorage() });
 export const config = { api: { bodyParser: false } }; // hand off to Multer
+const upload = multer({ storage: multer.memoryStorage() });
 
-/* ------------------------------------------------------------------ */
-/* 1.  lazy‑init Admin SDK for Storage (db is already initialised)    */
-if (getApps().length === 0) {
-  // If you keep the service‑account JSON in FIREBASE_SERVICE_ACCOUNT
-  // you don't need to pass credential again – admin already initialised
+/* lazy‑init Storage bucket (admin was initialised in firebaseAdmin.js) */
+if (getApps().length === 0)
   initializeApp({ storageBucket: process.env.CLIP_BUCKET });
-}
 const bucket = getStorage().bucket();
 
-/* ------------------------------------------------------------------ */
-/* 2.  the actual handler                                             */
 export default upload.single("video")(async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -37,36 +19,25 @@ export default upload.single("video")(async (req, res) => {
   }
 
   try {
-    /* 2‑a. derive basic meta */
-    const title = req.body.title?.trim() || "Untitled lesson";
-    const description = req.body.description?.trim() || "";
-    const lessonId =
-      req.query.id || // optional  /?id=abc123
-      Date.now().toString(36); // fallback
+    const { title = "Untitled lesson", description = "" } = req.body;
+    const lessonId = req.query.id || Date.now().toString(36);
 
-    /* 2‑b. create a stub doc the UI can already show */
-    await db.doc(`lessons/${lessonId}`).set(
-      {
-        title,
-        description,
-        status: "processing", // Cloud Function will flip to ready
-        createdAt: new Date(),
-      },
-      { merge: true }
-    );
+    await db
+      .doc(`lessons/${lessonId}`)
+      .set(
+        { title, description, status: "processing", createdAt: new Date() },
+        { merge: true }
+      );
 
-    /* 2‑c. upload master if the client sent one */
-    if (!req.file) throw new Error("No «video» file in form‑data");
+    if (!req.file) throw new Error('Missing multipart field "video"');
 
-    const dest = `master/${lessonId}.mp4`; // Cloud Function watches this path
+    const dest = `master/${lessonId}.mp4`;
     await bucket.file(dest).save(req.file.buffer, {
       contentType: req.file.mimetype,
-      resumable: false, // no tmp chunk object created
+      resumable: false,
       public: false,
     });
-    console.log("Uploaded master →", dest);
 
-    /* 2‑d. done */
     res.json({ id: lessonId });
   } catch (err) {
     console.error("❌ /api/upload‑lesson:", err);

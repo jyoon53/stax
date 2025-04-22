@@ -1,16 +1,13 @@
-import { useRouter } from "next/router";
-import { useMemo } from "react";
-import {
-  doc,
-  FirestoreDataConverter,
-  DocumentReference,
-} from "firebase/firestore";
-import { useDocumentData } from "react-firebase-hooks/firestore";
+// src/pages/lesson/[id].tsx
 import Head from "next/head";
 import Link from "next/link";
-import { db } from "../../../lib/firebaseClient"; // alias @ → adjust if needed
+import { useRouter } from "next/router";
+import { useMemo } from "react";
+import { doc, FirestoreDataConverter } from "firebase/firestore";
+import { useDocumentData } from "react-firebase-hooks/firestore";
+import { db } from "../../../lib/firebaseClient";
 
-/* ─── Firestore types ──────────────────────────────────────────────── */
+/* ── Firestore shapes ───────────────────────────────────────────────── */
 interface Chapter {
   roomId: string;
   clipUrl: string;
@@ -21,24 +18,22 @@ interface Lesson {
   chapters: Chapter[];
 }
 
-/* ─── Firestore converter ─────────────────────────────────────────── */
 const cv: FirestoreDataConverter<Lesson> = {
-  toFirestore: (l) => l as Record<string, unknown>,
+  toFirestore: (v) => v as any,
   fromFirestore: (s) => s.data() as Lesson,
 };
 
-/* ─── Component ───────────────────────────────────────────────────── */
 export default function LessonPlayer() {
   const { query } = useRouter();
 
-  /* eslint-disable react-hooks/exhaustive-deps */
-  const ref: DocumentReference<Lesson> | undefined = useMemo(() => {
-    if (!query.id) return undefined; // no router param yet
-    return doc(db, "lessons", String(query.id)).withConverter(cv);
-  }, [query.id]); // db is stable, omit
-  /* eslint-enable react-hooks/exhaustive-deps */
+  /* db is **never undefined** – only guard for query.id */
+  const ref = useMemo(() => {
+    return query.id
+      ? doc(db, "lessons", String(query.id)).withConverter(cv)
+      : undefined;
+  }, [query.id]);
 
-  const [lesson, loading] = useDocumentData<Lesson>(ref);
+  const [lesson, loading] = useDocumentData(ref);
 
   if (loading || !lesson) return <p className="p-8">Loading…</p>;
 
@@ -55,9 +50,8 @@ export default function LessonPlayer() {
           {lesson.chapters.map((c, i) => (
             <li key={`${c.roomId}-${i}`}>
               <h2 className="text-2xl font-semibold mb-2">
-                {i + 1}.&nbsp;{c.roomId}
+                {i + 1}. {c.roomId}
               </h2>
-
               <video
                 src={c.clipUrl}
                 controls

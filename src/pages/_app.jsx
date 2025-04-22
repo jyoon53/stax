@@ -21,6 +21,16 @@ export default function MyApp({ Component, pageProps }) {
     if (stored === "student" || stored === "instructor") setRole(stored);
   }, []);
 
+  if (typeof window === "undefined") {
+    // suppress “useLayoutEffect does nothing on the server” noise
+    // eslint-disable-next-line no-console
+    const consoleWarn = console.warn.bind(console);
+    console.warn = (...args) =>
+      args[0]?.toString().includes("useLayoutEffect")
+        ? undefined
+        : consoleWarn(...args);
+  }
+
   /* --- decide whether to render the sidebar ------------------------------- */
   const PUBLIC_ROUTES = ["/", "/login", "/signup"];
   const withSidebar = !PUBLIC_ROUTES.includes(router.pathname);
