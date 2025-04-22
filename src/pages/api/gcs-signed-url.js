@@ -11,12 +11,13 @@ import { db } from "../../../lib/firebaseAdmin";
 
 /* 1. Resolve bucket name --------------------------------------------------- */
 const BUCKET_NAME = process.env.CLIP_BUCKET?.trim();
-if (!BUCKET_NAME)
+if (!BUCKET_NAME) {
   throw new Error(
     'Missing env var CLIP_BUCKET (e.g. "roblox-lms.firebasestorage.app")'
   );
+}
 
-/* 2. Cloud Run slicer endpoint ------------------------------------------------ */
+/* 2. Cloud Run slicer endpoint -------------------------------------------- */
 const SLICER_URL = process.env.SLICER_URL?.trim(); // e.g. "https://slicer-demo-xyz.a.run.app"
 
 /* 3. Init Admin SDK (singleton) ------------------------------------------- */
@@ -45,15 +46,18 @@ export default async function handler(req, res) {
     return res.status(405).end("Method Not Allowed");
   }
 
-  /* ── Extract + sanitise payload ─────────────────────────────────────── */
+  /* ── Extract + sanitize payload ─────────────────────────────────────── */
   let { lessonId, contentType, title = "", description = "" } = req.body || {};
-  if (!lessonId || !contentType)
+  if (!lessonId || !contentType) {
     return res.status(400).end("Missing lessonId or contentType");
+  }
 
   lessonId = String(lessonId)
     .trim()
     .replace(/[^\w-]/g, "_");
-  if (!lessonId) return res.status(400).end("Invalid lessonId");
+  if (!lessonId) {
+    return res.status(400).end("Invalid lessonId");
+  }
 
   const objectKey = `master/${lessonId}.mp4`;
 
@@ -77,21 +81,27 @@ export default async function handler(req, res) {
     },
     { merge: true }
   );
-
   await db
     .doc(`sessions/${lessonId}`)
     .set({ obsT0: FieldValue.serverTimestamp() }, { merge: true });
 
-  /* ── Trigger slicing via Cloud Run (fire-and-forget) ───────────────────── */
+  /* ── Trigger slicing via Cloud Run (await to ensure request fires) ───── */
   if (SLICER_URL) {
-    fetch(`${SLICER_URL}/slice`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: lessonId,
-        bucket: BUCKET_NAME,
-      }),
-    }).catch((err) => console.error("Slicer service error:", err));
+    try {
+      const sliceRes = await fetch(`${SLICER_URL}/slice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: lessonId, bucket: BUCKET_NAME }),
+      });
+      if (!sliceRes.ok) {
+        console.error(
+          "Slice service responded with error:",
+          await sliceRes.text()
+        );
+      }
+    } catch (err) {
+      console.error("Failed to call slicer service:", err);
+    }
   }
 
   /* ── Respond to client ────────────────────────────────────────────────── */
