@@ -5,39 +5,37 @@ export default async function handler(req, res) {
   if (!lessonId) return res.status(400).json({ error: "lessonId required" });
 
   try {
-    /* 1️⃣  Treat the id as a session first: /sessions/{id}/progress */
+    /* ───────────── 1️⃣  Treat the ID as a session first ───────────── */
     const sess = await db.collection("sessions").doc(lessonId).get();
     if (sess.exists) {
       const snap = await sess.ref.collection("progress").get();
-
-      const rows = aggregateByStudent(snap);
-      return res.status(200).json(rows);
+      return res.status(200).json(aggregateByStudent(snap));
     }
 
-    /* 2️⃣  Fallback: treat it as a real lessonId (collection-group) */
+    /* ───────────── 2️⃣  Fallback: treat as real lessonId ──────────── */
     const snap = await db
       .collectionGroup("progress")
       .where("lessonID", "==", lessonId)
       .get();
 
     if (snap.empty)
-      return res.status(404).json({ error: "No progress found for id" });
+      return res.status(404).json({ error: "No progress found for this id" });
 
-    const rows = aggregateByStudent(snap);
-    return res.status(200).json(rows);
+    return res.status(200).json(aggregateByStudent(snap));
   } catch (err) {
     console.error("❌ /lesson-progress error:", err);
     return res.status(500).json({ error: err.message });
   }
 }
 
-/* ---------- helper ------------------------------------------------------ */
+/* -------------------------------------------------------------------------- */
+/*  Helper: aggregate each snapshot into one row per student                  */
+/* -------------------------------------------------------------------------- */
 function aggregateByStudent(snap) {
   const map = {};
+
   snap.forEach((doc) => {
     const d = doc.data();
-    const solved =
-      d.completed === true || (typeof d.score === "number" && d.score > 0);
 
     if (!map[d.studentId]) {
       map[d.studentId] = {
@@ -47,8 +45,11 @@ function aggregateByStudent(snap) {
         total: 0,
       };
     }
+
+    // Each log represents one completed exercise
     map[d.studentId].total += 1;
-    if (solved) map[d.studentId].completed += 1;
+    map[d.studentId].completed += 1;
   });
+
   return Object.values(map);
 }
