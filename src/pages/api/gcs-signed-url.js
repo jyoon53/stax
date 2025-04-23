@@ -4,11 +4,11 @@ import { getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../../../lib/firebaseAdmin";
 
-/* 1) bucket */
+/* 1) bucket --------------------------------------------------------------- */
 const BUCKET_NAME = process.env.CLIP_BUCKET?.trim();
 if (!BUCKET_NAME) throw new Error("Missing env var CLIP_BUCKET");
 
-/* 2) Admin SDK singleton */
+/* 2) Admin SDK ------------------------------------------------------------ */
 if (getApps().length === 0) {
   initializeApp({
     credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}")),
@@ -17,9 +17,11 @@ if (getApps().length === 0) {
 }
 const bucket = getStorage().bucket(BUCKET_NAME);
 
-/* 3) handler */
+/* 3) handler -------------------------------------------------------------- */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
+
+  /* CORS pre-flight */
   if (req.method === "OPTIONS") {
     res
       .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -39,7 +41,7 @@ export default async function handler(req, res) {
 
   const objectKey = `master/${lessonId}.mp4`;
 
-  /* signed URL (15 min) */
+  /* signed PUT url (15 min) */
   const [url] = await bucket.file(objectKey).getSignedUrl({
     version: "v4",
     action: "write",
@@ -47,7 +49,7 @@ export default async function handler(req, res) {
     contentType,
   });
 
-  /* Firestore stub */
+  /* Firestore stub for UI progress */
   await db.doc(`lessons/${lessonId}`).set(
     {
       title,
@@ -60,9 +62,7 @@ export default async function handler(req, res) {
     { merge: true }
   );
 
-  await db
-    .doc(`sessions/${lessonId}`)
-    .set({ obsT0: FieldValue.serverTimestamp() }, { merge: true });
+  /* ⬅️  NO obsT0 write here any more */
 
   res.json({ url, objectKey });
 }

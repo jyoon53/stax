@@ -12,22 +12,21 @@ import { sendRobloxMessage } from "../../../lib/robloxOpenCloud.js";
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
-    return res.status(405).json({ error: "Method Not Allowed" });
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   const { action = "start", lessonId = "defaultLesson" } = req.body || {};
-  if (!["start", "stop"].includes(action)) {
+  if (!["start", "stop"].includes(action))
     return res
       .status(400)
       .json({ success: false, error: "action must be 'start' or 'stop'" });
-  }
 
   try {
-    /* cookie‑based session id */
+    /* cookie-based 8-char sessionId */
     let sessionId = req.cookies.sessionId;
     if (action === "start" || !sessionId) sessionId = uuid().slice(0, 8);
 
-    /* ─────────── START ─────────── */
+    /* ── START ────────────────────────────────────────────────────────── */
     if (action === "start") {
       await db
         .collection("sessions")
@@ -37,55 +36,28 @@ export default async function handler(req, res) {
           { merge: true }
         );
 
-      try {
-        await sendRobloxMessage("lms-session", sessionId);
-        console.log("LMS → OpenCloud ✅ sent", sessionId);
-      } catch (err) {
-        console.warn("▶︎ OpenCloud publish skipped:", err.message);
-      }
-
-      try {
-        /* ✨ pass the ID so OBS names the file sessionId.mp4 */
-        await start(sessionId);
-      } catch {
-        console.warn("▶︎ OBS not reachable – continuing without recording");
-      }
+      await sendRobloxMessage("lms-session", sessionId).catch(() => {});
+      await start(sessionId).catch(() => {});
     }
 
-    /* ─────────── STOP ──────────── */
+    /* ── STOP ─────────────────────────────────────────────────────────── */
     if (action === "stop") {
       await stop().catch(() => {});
-      let file;
-      try {
-        ({ file } = await obsStatus());
-      } catch {
-        /* ignore */
-      }
-
+      const { file } = (await obsStatus().catch(() => ({}))) || {};
       const update = { stoppedAt: FieldValue.serverTimestamp() };
-      if (file !== undefined) update.masterVideoPath = file;
-
-      await db
-        .collection("sessions")
-        .doc(sessionId)
-        .set(update, { merge: true });
+      if (file) update.masterVideoPath = file;
+      await db.doc(`sessions/${sessionId}`).set(update, { merge: true });
     }
 
     /* final status */
-    let recording = false;
-    try {
-      ({ recording } = await obsStatus());
-    } catch {
-      /* keep false */
-    }
-
+    const { recording = false } = (await obsStatus().catch(() => ({}))) || {};
     res.setHeader(
       "Set-Cookie",
       `sessionId=${sessionId}; Path=/; SameSite=Lax; Max-Age=86400`
     );
     return res.json({ success: true, sessionId, action, recording });
   } catch (err) {
-    console.error("❌ /start-recording fatal:", err);
+    console.error(err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }
