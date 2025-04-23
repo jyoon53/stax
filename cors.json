@@ -1,8 +1,8 @@
 [
   {
-    "origin": ["https://stax-roblox.vercel.app", "http://localhost:3000"],
-    "method": ["PUT", "POST"],
-    "responseHeader": ["Content-Type"],
+    "origin": ["*"],
+    "method": ["PUT", "GET", "POST", "HEAD"],
+    "responseHeader": ["Content-Type", "X-Goog-*"],
     "maxAgeSeconds": 3600
   }
 ]

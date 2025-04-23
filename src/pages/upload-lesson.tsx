@@ -1,3 +1,4 @@
+// pages/upload-lesson.tsx
 import { useState } from "react";
 
 /* 8-char hex – same format your Roblox session IDs use */
@@ -12,30 +13,14 @@ export default function UploadLessonPage() {
   const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState("");
 
-  // Called when the file upload finishes successfully
-  function onUploadSuccess(lessonId: string) {
-    setMsg("✓ File uploaded — triggering slice…");
-    fetch("/api/trigger-slice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lessonId }),
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(r.statusText);
-        return r.json();
-      })
-      .then(() => setMsg("✅ Slicing kicked off"))
-      .catch((err) => setMsg(`✗ Slice error: ${err.message}`));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
 
-    /* ── 1 · derive lessonId from file name ───────────────────────── */
+    // 1) derive session ID from the filename
     const lessonId = file.name.replace(/\.[^.]+$/, "").toLowerCase();
     if (!ID_RE.test(lessonId)) {
-      setMsg("✗ File name must be the 8-char sessionId, e.g. 39cd3bfe.mov");
+      setMsg("✗ File name must be the 8-char sessionId, e.g. 39cd3bfe.mp4");
       return;
     }
 
@@ -43,7 +28,7 @@ export default function UploadLessonPage() {
     setPct(0);
     setMsg("");
 
-    /* ── 2 · get signed PUT URL ───────────────────────────────────── */
+    // 2) get a signed PUT URL
     const metaRes = await fetch("/api/gcs-signed-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,26 +39,26 @@ export default function UploadLessonPage() {
         description: desc,
       }),
     });
-
     if (!metaRes.ok) {
-      setBusy(false);
       setMsg("✗ Failed to obtain upload URL");
+      setBusy(false);
       return;
     }
     const { url } = await metaRes.json();
 
-    /* ── 3 · PUT the file directly to Cloud Storage ────────────────── */
+    // 3) PUT the file to Cloud Storage
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
       xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
 
-      xhr.upload.onprogress = (ev) =>
-        ev.lengthComputable && setPct(Math.round((ev.loaded / ev.total) * 100));
-
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) {
+          setPct(Math.round((ev.loaded / ev.total) * 100));
+        }
+      };
       xhr.onload = () => {
         if (xhr.status === 200) {
-          onUploadSuccess(lessonId);
           resolve();
         } else {
           reject(new Error("Upload failed"));
@@ -83,13 +68,17 @@ export default function UploadLessonPage() {
       xhr.send(file);
     })
       .then(() => {
-        // we already called onUploadSuccess and set the message there
+        // once the upload is in, we'll let the backend event trigger do its work
+        setMsg("✓ File uploaded — processing…");
       })
-      .catch((err) => setMsg(`✗ ${err.message}`))
-      .finally(() => setBusy(false));
+      .catch((err) => {
+        setMsg(`✗ ${err.message}`);
+      })
+      .finally(() => {
+        setBusy(false);
+      });
   }
 
-  /* ── UI ─────────────────────────────────────────────────────────── */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>
