@@ -69,8 +69,10 @@ export default function UploadLessonPage() {
       setFile(null);
       setTitle("");
       setDesc("");
-    } catch (err: any) {
-      setMsg(`✗ ${err.message}`);
+    } catch (err: unknown) {
+      // narrow the unknown to something printable
+      const message = err instanceof Error ? err.message : JSON.stringify(err);
+      setMsg(`✗ ${message}`);
     } finally {
       setBusy(false);
     }
