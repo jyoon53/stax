@@ -1,6 +1,8 @@
-imageio-ffmpeg>=0.4.0
-flask
-google-cloud-storage
-google-cloud-firestore
-imageio-ffmpeg
-gunicorn
+# ── runtime deps for the slicer service ─────────────────────────
+Flask==3.*                 # web framework
+gunicorn==21.*             # production WSGI server
+
+imageio-ffmpeg>=0.4.9      # pulls a static ffmpeg binary at runtime
+
+google-cloud-storage>=2.14 # download master / upload clips
+google-cloud-firestore>=2.14

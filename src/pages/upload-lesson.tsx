@@ -1,23 +1,26 @@
 // pages/upload-lesson.tsx
 import { useState } from "react";
 
-/* 8-char hex – same format your Roblox session IDs use */
+/** 8-char hex – the Roblox session-ID format */
 const ID_RE = /^[0-9a-f]{8}$/i;
 
 export default function UploadLessonPage() {
+  /* ── form state ─────────────────────────────────────────────── */
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
 
+  /* ── UI state ───────────────────────────────────────────────── */
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  /* ── submit handler ────────────────────────────────────────── */
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!file) return;
 
-    // 1) derive session ID from the filename
+    /* 1️⃣  derive session/lesson ID */
     const lessonId = file.name.replace(/\.[^.]+$/, "").toLowerCase();
     if (!ID_RE.test(lessonId)) {
       setMsg("✗ File name must be the 8-char sessionId, e.g. 39cd3bfe.mp4");
@@ -28,57 +31,52 @@ export default function UploadLessonPage() {
     setPct(0);
     setMsg("");
 
-    // 2) get a signed PUT URL
-    const metaRes = await fetch("/api/gcs-signed-url", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        lessonId,
-        contentType: file.type || "video/mp4",
-        title,
-        description: desc,
-      }),
-    });
-    if (!metaRes.ok) {
-      setMsg("✗ Failed to obtain upload URL");
-      setBusy(false);
-      return;
-    }
-    const { url } = await metaRes.json();
-
-    // 3) PUT the file to Cloud Storage
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", url);
-      xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
-
-      xhr.upload.onprogress = (ev) => {
-        if (ev.lengthComputable) {
-          setPct(Math.round((ev.loaded / ev.total) * 100));
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          resolve();
-        } else {
-          reject(new Error("Upload failed"));
-        }
-      };
-      xhr.onerror = () => reject(new Error("Network error"));
-      xhr.send(file);
-    })
-      .then(() => {
-        // once the upload is in, we'll let the backend event trigger do its work
-        setMsg("✓ File uploaded — processing…");
-      })
-      .catch((err) => {
-        setMsg(`✗ ${err.message}`);
-      })
-      .finally(() => {
-        setBusy(false);
+    try {
+      /* 2️⃣  ask backend for a signed PUT URL  
+             (this also triggers the slicer on the server)           */
+      const metaRes = await fetch("/api/gcs-signed-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lessonId,
+          contentType: file.type || "video/mp4",
+          title,
+          description: desc,
+        }),
       });
+      if (!metaRes.ok) throw new Error("couldn’t obtain upload URL");
+      const { url } = await metaRes.json();
+
+      /* 3️⃣  PUT the video straight to Cloud Storage */
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", url);
+        xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable)
+            setPct(Math.round((ev.loaded / ev.total) * 100));
+        };
+
+        xhr.onload = () =>
+          xhr.status === 200 ? resolve() : reject(new Error("upload failed"));
+        xhr.onerror = () => reject(new Error("network error"));
+        xhr.send(file);
+      });
+
+      /* ✅  finished – Cloud Run slicer will take over */
+      setMsg("✓ File uploaded — processing…");
+      setFile(null);
+      setTitle("");
+      setDesc("");
+    } catch (err: any) {
+      setMsg(`✗ ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
+  /* ── UI ─────────────────────────────────────────────────────── */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>
@@ -99,8 +97,8 @@ export default function UploadLessonPage() {
 
         <textarea
           className="border p-2 w-full"
-          placeholder="Description"
           rows={3}
+          placeholder="Description"
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
         />
@@ -122,7 +120,7 @@ export default function UploadLessonPage() {
         </button>
       </form>
 
-      {msg && <p>{msg}</p>}
+      {msg && <p className="pt-2">{msg}</p>}
     </main>
   );
 }

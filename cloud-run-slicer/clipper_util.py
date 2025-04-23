@@ -17,6 +17,7 @@ import tempfile
 import functools
 import collections
 from typing import List, Dict, Tuple, Union
+import logging
 
 # ────────────────────────────── 1. Firestore (lazy) ─────────────────────────
 @functools.lru_cache(maxsize=1)
@@ -68,29 +69,45 @@ def _fetch_events(session_id: str):
         .stream()
     )
 
-
-def _pair_enter_exit(events) -> Dict[str, List[Tuple[Union[int, float], Union[int, float]]]]:
+def _pair_enter_exit(
+    events,
+) -> Dict[str, List[Tuple[Union[int, float], Union[int, float]]]]:
     """
-    Returns { roomID: [(enterTS, exitTS), …] }.
-    Unmatched events are ignored (robust against missing “exit”).
+    Returns {roomID: [(enterTS, exitTS), …]}.
+
+    • Logs every event it sees  
+    • Logs every pair it creates  
+    • Logs any orphan EXIT (missing ENTER) or leftover ENTER
     """
     by_room: Dict[str, List[Tuple[str, Union[int, float]]]] = collections.defaultdict(list)
     for snap in events:
         e = snap.to_dict() or {}
         typ = e.get("eventType")
         ts  = e.get("timestamp")
-        if typ in ("enter", "exit") and ts is not None:
-            by_room[e["roomID"]].append((typ, ts))
+        room = e.get("roomID")
+        logging.debug("event  %-5s  room=%s  ts=%s", typ, room, ts)
+        if typ in ("enter", "exit") and ts is not None and room:
+            by_room[room].append((typ, ts))
 
     ranges: Dict[str, List[Tuple[Union[int, float], Union[int, float]]]] = collections.defaultdict(list)
+
     for rid, evts in by_room.items():
         stack: List[Union[int, float]] = []
         for typ, ts in evts:
             if typ == "enter":
                 stack.append(ts)
-            elif typ == "exit" and stack:
-                start_ts = stack.pop(0)
-                ranges[rid].append((start_ts, ts))
+            elif typ == "exit":
+                if stack:
+                    start_ts = stack.pop(0)
+                    ranges[rid].append((start_ts, ts))
+                    logging.debug("pair   room=%s  enter=%s  exit=%s", rid, start_ts, ts)
+                else:
+                    logging.warning("orphan EXIT ! room=%s  ts=%s (no matching ENTER yet)", rid, ts)
+
+        # any leftover ENTERs did not find an EXIT
+        for unpaired in stack:
+            logging.warning("orphan ENTER! room=%s  ts=%s (no matching EXIT)", rid, unpaired)
+
     return ranges
 
 # ────────────────────────────── 4. public API ───────────────────────────────
