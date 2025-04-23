@@ -1,29 +1,29 @@
 // pages/upload-lesson.tsx
 import { useState } from "react";
 
-/** 8-char hex – the Roblox session-ID format */
+/** 8-char hex – matches the Roblox session-ID format */
 const ID_RE = /^[0-9a-f]{8}$/i;
 
 export default function UploadLessonPage() {
-  /* ── form state ─────────────────────────────────────────────── */
+  /* form state */
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
 
-  /* ── UI state ───────────────────────────────────────────────── */
+  /* UI state */
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState("");
 
-  /* ── submit handler ────────────────────────────────────────── */
+  /* submit → get signed URL → PUT video */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!file) return;
 
-    /* 1️⃣  derive session/lesson ID */
+    /* 1️⃣ derive lessonId from filename */
     const lessonId = file.name.replace(/\.[^.]+$/, "").toLowerCase();
     if (!ID_RE.test(lessonId)) {
-      setMsg("✗ File name must be the 8-char sessionId, e.g. 39cd3bfe.mp4");
+      setMsg("✗ Filename must be the 8-char sessionId, e.g. 39cd3bfe.mp4");
       return;
     }
 
@@ -32,8 +32,7 @@ export default function UploadLessonPage() {
     setMsg("");
 
     try {
-      /* 2️⃣  ask backend for a signed PUT URL  
-             (this also triggers the slicer on the server)           */
+      /* 2️⃣ ask backend for signed PUT URL */
       const metaRes = await fetch("/api/gcs-signed-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -45,9 +44,9 @@ export default function UploadLessonPage() {
         }),
       });
       if (!metaRes.ok) throw new Error("couldn’t obtain upload URL");
-      const { url } = await metaRes.json();
+      const { url }: { url: string } = await metaRes.json();
 
-      /* 3️⃣  PUT the video straight to Cloud Storage */
+      /* 3️⃣ PUT the video straight to Cloud-Storage */
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", url);
@@ -64,21 +63,19 @@ export default function UploadLessonPage() {
         xhr.send(file);
       });
 
-      /* ✅  finished – Cloud Run slicer will take over */
+      /* ✅ done – worker will slice & publish clips */
       setMsg("✓ File uploaded — processing…");
       setFile(null);
       setTitle("");
       setDesc("");
     } catch (err: unknown) {
-      // narrow the unknown to something printable
-      const message = err instanceof Error ? err.message : JSON.stringify(err);
-      setMsg(`✗ ${message}`);
+      setMsg(`✗ ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     } finally {
       setBusy(false);
     }
   }
 
-  /* ── UI ─────────────────────────────────────────────────────── */
+  /* UI */
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Upload new lesson</h1>
