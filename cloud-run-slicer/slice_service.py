@@ -5,6 +5,15 @@ import tempfile
 import pathlib
 import logging
 import shutil
+
+# ──────────────────── bundle ffmpeg into PATH ─────────────────────────────
+from imageio_ffmpeg import get_ffmpeg_exe
+
+_ffmpeg_exe = get_ffmpeg_exe()
+_ffmpeg_dir = os.path.dirname(_ffmpeg_exe)
+os.environ["PATH"] = f"{_ffmpeg_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+
+# ────────────────────────────────────────────────────────────────────────────
 from flask import Flask, request, jsonify
 from google.cloud import storage, firestore
 from clipper_util import slice_session  # reuse your existing slicer util
@@ -37,7 +46,7 @@ def slice_video():
             ext = pathlib.Path(blob.name).suffix
             local_master = pathlib.Path(tmpdir) / f"{session_id}{ext}"
             logging.info(f"⬇️ Downloading {blob.name} → {local_master}")
-            blob.download_to_filename(local_master)
+            blob.download_to_filename(str(local_master))
             logging.info("Download complete.")
             break
 
@@ -61,7 +70,6 @@ def slice_video():
                     obs_t0 = None
         logging.debug(f"Raw obsT0 = {obs_t0}")
 
-        # Fetch all event timestamps
         evts = list(
             db.collection("sessions")
               .document(session_id)
